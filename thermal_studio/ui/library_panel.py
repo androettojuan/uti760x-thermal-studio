@@ -2,20 +2,22 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QSize, Qt, QUrl, Signal
+from PySide6.QtCore import QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
-    QAbstractItemView, QGroupBox, QHBoxLayout, QInputDialog, QLabel, QListWidget,
-    QListWidgetItem, QMenu, QMessageBox, QProgressBar, QPushButton, QSplitter, QTreeWidget,
-    QTreeWidgetItem, QVBoxLayout, QWidget,
+    QAbstractItemView, QFrame, QHBoxLayout, QInputDialog, QListWidget, QListWidgetItem, QMenu,
+    QMessageBox, QProgressBar, QSplitter, QStackedWidget, QTreeWidget, QTreeWidgetItem,
+    QVBoxLayout, QWidget,
 )
 
 from ..core.importer import Modo
 from ..core.library import CARPETA_IMPORTADAS, ErrorBiblioteca, es_foto, fecha_visible
 from ..core.thermal_image import _fecha_desde_nombre
-from . import sistema
+from . import sistema, theme
+from .camera_monitor import MonitorCamara
 from .import_worker import HiloDescarga, HiloPlan
 from .thumbnails import TAMANO, CargadorMiniaturas
+from .widgets import boton, boton_icono, etiqueta, marco
 
 MIME_CARPETA = "application/x-thermal-studio-carpeta"
 ROL_REL = Qt.UserRole
@@ -103,7 +105,8 @@ class Galeria(QListWidget):
         super().__init__()
         self.setViewMode(QListWidget.IconMode)
         self.setIconSize(QSize(TAMANO, int(TAMANO * 0.8)))
-        self.setGridSize(QSize(TAMANO + 16, int(TAMANO * 0.8) + 34))
+        self.setGridSize(QSize(TAMANO + 18, int(TAMANO * 0.8) + 38))
+        self.setSpacing(4)
         self.setResizeMode(QListWidget.Adjust)
         self.setMovement(QListWidget.Static)
         self.setUniformItemSizes(True)
@@ -125,17 +128,18 @@ class Galeria(QListWidget):
 
 def _icono_vacio():
     pix = QPixmap(TAMANO, int(TAMANO * 0.8))
-    pix.fill(QColor("#2a2a2a"))
+    pix.fill(QColor(theme.color("superficie")))
     return QIcon(pix)
 
 
 # -- panel -----------------------------------------------------------------
-class LibraryPanel(QWidget):
+class LibraryPanel(QFrame):
     abrirFoto = Signal(Path)
     mensaje = Signal(str)
 
     def __init__(self, biblioteca, conexion_camara, parent=None):
         super().__init__(parent)
+        self.setProperty("rol", "panel")
         self.bib = biblioteca
         self.conexion_camara = conexion_camara  # callable -> dict para CameraFTP
         self.carpeta_actual = None
@@ -147,10 +151,13 @@ class LibraryPanel(QWidget):
         self.miniaturas.lista.connect(self._miniatura_lista)
 
         lay = QVBoxLayout(self)
-        lay.setContentsMargins(4, 4, 4, 4)
+        lay.setContentsMargins(12, 14, 12, 8)
+        lay.setSpacing(12)
         lay.addWidget(self._crear_camara())
 
         split = QSplitter(Qt.Vertical)
+        split.setHandleWidth(14)
+        split.setStyleSheet("QSplitter::handle { background: transparent; }")
         split.addWidget(self._crear_carpetas())
         split.addWidget(self._crear_galeria())
         split.setStretchFactor(0, 1)
@@ -158,35 +165,189 @@ class LibraryPanel(QWidget):
         lay.addWidget(split, 1)
 
         self.refrescar()
+        theme.gestor.cambiado.connect(self._tema_cambiado)
+
+        self.settings = QSettings("ThermalStudio", "ThermalStudio")
+        self._conectando = None  # QTimer de espera mientras se conecta el WiFi
+        self.monitor = MonitorCamara(self.conexion_camara, lambda: self.bib, self)
+        self.monitor.cambiado.connect(self._estado_camara)
+        self.monitor.conexionPedida.connect(self._conexion_pedida)
+        self._estado_camara(self.monitor.estado, inicial=True)
+        self.monitor.iniciar()
+
+    def _tema_cambiado(self, *_):
+        self._icono_vacio = _icono_vacio()
+        self.refrescar()
+        if hasattr(self, "monitor"):
+            self._estado_camara(self.monitor.estado)
 
     # == camara ==============================================================
     def _crear_camara(self):
-        caja = QGroupBox("Cámara (WiFi)")
+        caja = marco("tarjeta")
         v = QVBoxLayout(caja)
-        h = QHBoxLayout()
-        self.btn_faltantes = QPushButton("Traer faltantes")
-        self.btn_faltantes.setToolTip("Descargar solo las fotos que todavía no se importaron")
-        self.btn_faltantes.setDefault(True)
-        self.btn_todo = QPushButton("Traer todas")
-        self.btn_todo.setToolTip("Descargar todas las fotos de la cámara que no estén en la "
-                                 "biblioteca, incluidas las que hayas borrado antes")
+        v.setContentsMargins(14, 12, 14, 12)
+        v.setSpacing(10)
+        cab = QHBoxLayout()
+        cab.setSpacing(10)
+        self.ico_camara = etiqueta()
+        cab.addWidget(self.ico_camara)
+        tit = QVBoxLayout()
+        tit.setSpacing(0)
+        tit.addWidget(etiqueta("Cámara", "titulo"))
+        self.lbl_estado = etiqueta("Buscando la cámara…", "suave")
+        self.lbl_estado.setWordWrap(True)
+        tit.addWidget(self.lbl_estado)
+        cab.addLayout(tit, 1)
+        v.addLayout(cab)
+
+        # Dos juegos de botones: importar (conectada) o conectar (sin conexion)
+        self.pila_botones = QStackedWidget()
+        importar = QWidget()
+        h = QHBoxLayout(importar)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        self.btn_faltantes = boton("Traer faltantes", "mdi6.download", "primario",
+                                   "Descargar solo las fotos que todavía no se importaron")
+        self.btn_todo = boton("Traer todas", "mdi6.download-multiple", "secundario",
+                              "Descargar todas las fotos de la cámara que no estén en la "
+                              "biblioteca, incluidas las que hayas borrado antes")
         self.btn_faltantes.clicked.connect(lambda: self.importar(Modo.FALTANTES))
         self.btn_todo.clicked.connect(lambda: self.importar(Modo.TODO))
         h.addWidget(self.btn_faltantes)
         h.addWidget(self.btn_todo)
-        v.addLayout(h)
+
+        conectar = QWidget()
+        h = QHBoxLayout(conectar)
+        h.setContentsMargins(0, 0, 0, 0)
+        h.setSpacing(8)
+        self.btn_conectar = boton("Conectar", "mdi6.wifi", "primario")
+        self.btn_conectar.clicked.connect(self.conectar)
+        self.btn_redes = boton("Redes WiFi", "mdi6.format-list-bulleted", "secundario",
+                               "Abrir la lista de redes WiFi para elegir la de la cámara")
+        self.btn_redes.clicked.connect(self._abrir_redes)
+        h.addWidget(self.btn_conectar)
+        h.addWidget(self.btn_redes)
+        self.pila_botones.addWidget(importar)
+        self.pila_botones.addWidget(conectar)
+        v.addWidget(self.pila_botones)
 
         self.barra = QProgressBar()
         self.barra.setTextVisible(True)
-        self.lbl_progreso = QLabel()
+        self.lbl_progreso = etiqueta("", "suave")
         self.lbl_progreso.setWordWrap(True)
-        self.lbl_progreso.setStyleSheet("font-size: 11px;")
-        self.btn_cancelar = QPushButton("Cancelar")
+        self.btn_cancelar = boton("Cancelar", "mdi6.close", "peligro")
         self.btn_cancelar.clicked.connect(self._cancelar)
         for w in (self.barra, self.lbl_progreso, self.btn_cancelar):
             v.addWidget(w)
             w.hide()
         return caja
+
+    # -- estado de la conexion ---------------------------------------------
+    def red_camara(self):
+        """Nombre (SSID) de la red WiFi de la camara, si se conoce."""
+        return self.settings.value("camara/wifi", "") or ""
+
+    def _estado_camara(self, estado, inicial=False):
+        # La primera vez que se encuentra la camara, se aprende el nombre de su red
+        if estado.conectada and estado.wifi and not self.red_camara():
+            self.settings.setValue("camara/wifi", estado.wifi)
+        if estado.conectada and self._conectando:
+            self._conectando.stop()
+            self._conectando = None
+
+        def punto(token, texto):
+            return "<span style='color:%s'>●</span>&nbsp; %s" % (theme.color(token), texto)
+
+        red = self.red_camara()
+        if inicial:
+            texto, tok, conectada = "Buscando la cámara…", "texto_suave", False
+        elif estado.conectada:
+            conectada, tok = True, "ok"
+            if estado.nuevas is None:
+                texto = "Conectada · buscando fotos nuevas…"
+            elif estado.nuevas == 0:
+                texto = "Conectada · no hay fotos nuevas (%d en la cámara)" % estado.en_camara
+            else:
+                texto = "Conectada · <b>%d foto%s nueva%s</b>" % (
+                    estado.nuevas, "" if estado.nuevas == 1 else "s",
+                    "" if estado.nuevas == 1 else "s")
+        elif self._conectando:
+            texto, tok, conectada = "Conectando a «%s»…" % red, "aviso", False
+        else:
+            conectada, tok = False, "texto_suave"
+            texto = "Sin conexión"
+            if estado.wifi and estado.wifi != red:
+                texto += " · estás en la red «%s»" % estado.wifi
+            elif estado.wifi == red and red:
+                texto += " · conectado a «%s» pero la cámara no responde. ¿Tiene el FTP " \
+                         "activado?" % red
+            elif not estado.wifi:
+                texto += " · el WiFi está desconectado"
+        self.lbl_estado.setText(punto(tok, texto))
+        self.ico_camara.setPixmap(theme.icono(
+            "mdi6.wifi" if conectada else "mdi6.wifi-off",
+            "acento" if conectada else "texto_suave").pixmap(QSize(22, 22)))
+
+        if not self.importando():
+            self.pila_botones.setCurrentIndex(0 if conectada else 1)
+        self._reintentar = bool(red) and estado.wifi == red and not conectada
+        if self._reintentar:
+            self.btn_conectar.setText("Reintentar")
+            self.btn_conectar.setToolTip("Volver a buscar la cámara en la red «%s»" % red)
+        elif red:
+            self.btn_conectar.setText("Conectar a «%s»" % red)
+            self.btn_conectar.setToolTip(
+                "Conectar la PC al WiFi de la cámara. Mientras estés conectado a la "
+                "cámara, la PC puede quedarse sin internet por WiFi.")
+        else:
+            self.btn_conectar.setText("Elegir red de la cámara")
+            self.btn_conectar.setToolTip("Abrir la lista de redes WiFi para conectarte a la "
+                                         "de la cámara. La app la recuerda para la próxima vez.")
+        self.btn_conectar.setEnabled(not self._conectando)
+        self.btn_redes.setVisible(bool(red))
+
+    def conectar(self):
+        red = self.red_camara()
+        if getattr(self, "_reintentar", False):
+            self.monitor.acelerar()
+            return
+        if not red:
+            self._abrir_redes()
+            return
+        self.monitor.conectar_wifi(red)
+        self._conectando = QTimer(self)
+        self._conectando.setSingleShot(True)
+        self._conectando.timeout.connect(self._conexion_vencida)
+        self._conectando.start(30000)
+        self._estado_camara(self.monitor.estado)
+
+    def _conexion_pedida(self, ok, mensaje):
+        if ok or not self._conectando:
+            return  # sigue esperando que la camara responda
+        self._conectando.stop()
+        self._conectando = None
+        self._estado_camara(self.monitor.estado)
+        r = QMessageBox.question(
+            self, "Conectar",
+            "Windows no pudo conectarse a la red «%s».\n\n%s\n\n¿Abrir la lista de redes "
+            "WiFi para elegirla a mano?" % (self.red_camara(), mensaje or ""))
+        if r == QMessageBox.Yes:
+            self._abrir_redes()
+
+    def _conexion_vencida(self):
+        self._conectando = None
+        self._estado_camara(self.monitor.estado)
+        QMessageBox.information(
+            self, "Conectar",
+            "No se encontró la cámara en la red «%s».\n\nRevisá que la cámara esté encendida, "
+            "con el punto de acceso WiFi y el FTP activados." % self.red_camara())
+
+    def _abrir_redes(self):
+        if not sistema.abrir_redes_wifi():
+            QMessageBox.information(self, "Conectar",
+                                    "Abrí la configuración de WiFi del sistema y conectate a la "
+                                    "red de la cámara.")
+        self.monitor.acelerar()
 
     def importando(self):
         return self._hilo is not None
@@ -195,6 +356,7 @@ class LibraryPanel(QWidget):
         if self.importando():
             return
         self._modo = modo
+        self.monitor.pausar(True)
         self._set_ocupado(True, "Conectando con la cámara…")
         self._hilo = HiloPlan(self.conexion_camara(), self.bib, modo, self)
         self._hilo.listo.connect(self._plan_listo)
@@ -263,6 +425,9 @@ class LibraryPanel(QWidget):
             self.lbl_progreso.setText("Cancelando…")
 
     def _set_ocupado(self, ocupado, texto="", descargando=False):
+        if not ocupado:
+            self.monitor.pausar(False)
+            self.monitor.recontar()
         self.btn_faltantes.setEnabled(not ocupado)
         self.btn_todo.setEnabled(not ocupado)
         self.lbl_progreso.setVisible(ocupado)
@@ -278,6 +443,7 @@ class LibraryPanel(QWidget):
 
     def detener(self):
         """Al cerrar la app: cancela y espera la descarga en curso."""
+        self.monitor.detener()
         if isinstance(self._hilo, HiloDescarga):
             self._hilo.cancelar()
         if self._hilo:
@@ -293,24 +459,33 @@ class LibraryPanel(QWidget):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
-        v.addWidget(QLabel("<b>Carpetas</b>"))
+        v.setSpacing(8)
         h = QHBoxLayout()
-        self.btn_carpeta = QPushButton("+ Carpeta")
-        self.btn_carpeta.setToolTip("Crear una carpeta principal, por ejemplo «Subestaciones»")
-        self.btn_carpeta.clicked.connect(self.nueva_carpeta)
-        self.btn_subcarpeta = QPushButton("+ Subcarpeta")
-        self.btn_subcarpeta.setToolTip("Crear una carpeta dentro de la seleccionada")
-        self.btn_subcarpeta.clicked.connect(self.nueva_subcarpeta)
-        self.btn_renombrar = QPushButton("Renombrar")
+        h.setSpacing(4)
+        h.addWidget(etiqueta("CARPETAS", "seccion"), 1)
+        self.btn_renombrar = boton_icono("mdi6.pencil-outline", "Renombrar la carpeta")
         self.btn_renombrar.clicked.connect(self.renombrar_carpeta)
-        self.btn_eliminar = QPushButton("Eliminar")
-        self.btn_eliminar.setToolTip("Eliminar la carpeta (solo si no tiene fotos)")
+        self.btn_eliminar = boton_icono("mdi6.trash-can-outline",
+                                        "Eliminar la carpeta (solo si no tiene fotos)")
         self.btn_eliminar.clicked.connect(self.eliminar_carpeta)
-        for b in (self.btn_carpeta, self.btn_subcarpeta, self.btn_renombrar, self.btn_eliminar):
-            h.addWidget(b)
+        h.addWidget(self.btn_renombrar)
+        h.addWidget(self.btn_eliminar)
+        v.addLayout(h)
+        h = QHBoxLayout()
+        h.setSpacing(8)
+        self.btn_carpeta = boton("Carpeta", "mdi6.folder-plus-outline",
+                                 tooltip="Crear una carpeta principal, por ejemplo «Subestaciones»")
+        self.btn_carpeta.clicked.connect(self.nueva_carpeta)
+        self.btn_subcarpeta = boton("Subcarpeta", "mdi6.file-tree-outline",
+                                    tooltip="Crear una carpeta dentro de la seleccionada")
+        self.btn_subcarpeta.clicked.connect(self.nueva_subcarpeta)
+        h.addWidget(self.btn_carpeta)
+        h.addWidget(self.btn_subcarpeta)
         v.addLayout(h)
 
         self.arbol = ArbolCarpetas()
+        self.arbol.setIconSize(QSize(18, 18))
+        self.arbol.setIndentation(16)
         self.arbol.currentItemChanged.connect(self._carpeta_elegida)
         self.arbol.fotosSoltadas.connect(self._fotos_soltadas)
         self.arbol.carpetaSoltada.connect(self._carpeta_soltada)
@@ -342,9 +517,9 @@ class LibraryPanel(QWidget):
         self.arbol.blockSignals(True)
         self.arbol.clear()
         conteos = self._conteos()
-        estilo = self.style()
-        ico_carpeta = estilo.standardIcon(estilo.StandardPixmap.SP_DirIcon)
-        ico_importadas = estilo.standardIcon(estilo.StandardPixmap.SP_DriveHDIcon)
+        ico_carpeta = theme.icono("mdi6.folder-outline", "texto_suave")
+        ico_fecha = theme.icono("mdi6.calendar-blank-outline", "texto_suave")
+        ico_importadas = theme.icono("mdi6.camera-outline", "acento")
 
         def agregar(padre, rel, nombre, icono, protegida=False):
             it = QTreeWidgetItem([self._etiqueta(nombre, conteos.get(rel, 0))])
@@ -362,7 +537,8 @@ class LibraryPanel(QWidget):
                 subs = sorted(subs, reverse=True)  # fechas AAAA-MM-DD: la mas nueva arriba
             for sub in subs:
                 visible = fecha_visible(sub) if rel == CARPETA_IMPORTADAS else sub
-                agregar(it, "%s/%s" % (rel, sub), visible, ico_carpeta)
+                agregar(it, "%s/%s" % (rel, sub), visible,
+                        ico_fecha if rel == CARPETA_IMPORTADAS else ico_carpeta)
             it.setExpanded(rel not in self._colapsadas)
             return it
 
@@ -511,15 +687,15 @@ class LibraryPanel(QWidget):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
-        self.lbl_galeria = QLabel()
+        v.setSpacing(8)
+        self.lbl_galeria = etiqueta("")
+        self.lbl_galeria.setWordWrap(True)
         v.addWidget(self.lbl_galeria)
         self.galeria = Galeria()
         self.galeria.currentItemChanged.connect(self._foto_elegida)
         self.galeria.customContextMenuRequested.connect(self._menu_galeria)
         v.addWidget(self.galeria)
-        ayuda = QLabel("Arrastrá las fotos a una carpeta para organizarlas.")
-        ayuda.setStyleSheet("color: #888; font-size: 11px;")
-        v.addWidget(ayuda)
+        v.addWidget(etiqueta("Arrastrá las fotos a una carpeta para organizarlas.", "suave"))
         return w
 
     def _cargar_galeria(self):
@@ -534,8 +710,9 @@ class LibraryPanel(QWidget):
             fotos, n_sub = [], 0
         titulo = self.nombre_visible(rel)
         if fotos:
-            self.lbl_galeria.setText("<b>%s</b> — %d foto%s"
-                                     % (titulo, len(fotos), "" if len(fotos) == 1 else "s"))
+            self.lbl_galeria.setText("<b>%s</b> &nbsp;<span style='color:%s'>%d foto%s</span>"
+                                     % (titulo, theme.color("texto_suave"), len(fotos),
+                                        "" if len(fotos) == 1 else "s"))
         elif n_sub:
             self.lbl_galeria.setText("<b>%s</b> — elegí una subcarpeta para ver sus fotos" % titulo)
         else:

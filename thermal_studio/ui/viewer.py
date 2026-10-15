@@ -4,11 +4,13 @@ import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
 
 from ..core import palettes
+from . import theme
 
 pg.setConfigOptions(imageAxisOrder="row-major", antialias=True)
 
-COLOR_MAX = "#ff3b30"
-COLOR_MIN = "#0a84ff"
+# Sobre la imagen los colores no dependen del tema: el fondo es la imagen misma
+COLOR_MAX = "#ff5b4f"
+COLOR_MIN = "#3d9bff"
 COLOR_CENTRO = "#ffffff"
 
 
@@ -34,7 +36,6 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setBackground("#1e1e1e")
         self.img = None
         self.paleta = palettes.POR_DEFECTO
         self.invertir = False
@@ -58,17 +59,18 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.vb.addItem(self.marcas)
         self.etiquetas = []
         for color in (COLOR_MAX, COLOR_MIN, COLOR_CENTRO):
-            t = pg.TextItem(color=color, fill=pg.mkBrush(0, 0, 0, 150), anchor=(0, 1))
+            t = pg.TextItem(color=color, fill=pg.mkBrush(14, 16, 20, 200), anchor=(0, 1))
             t.setZValue(10)
             self.vb.addItem(t)
             self.etiquetas.append(t)
 
         # Lectura bajo el cursor
-        self.lectura = pg.TextItem(color="w", fill=pg.mkBrush(0, 0, 0, 180))
+        self.lectura = pg.TextItem(color="w", fill=pg.mkBrush(14, 16, 20, 215))
         self.lectura.setZValue(20)
         self.lectura.hide()
         self.vb.addItem(self.lectura)
 
+        theme.al_cambiar(self._aplicar_tema)
         self.scene().sigMouseMoved.connect(self._mouse_movido)
         self.setCursor(Qt.CrossCursor)
 
@@ -98,6 +100,12 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
             t.setVisible(visible)
 
     # -- interno -----------------------------------------------------------
+    def _aplicar_tema(self):
+        self.setBackground(theme.color("fondo"))
+        eje = self.cbar.axis
+        eje.setPen(pg.mkPen(theme.color("borde")))
+        eje.setTextPen(pg.mkPen(theme.color("texto_suave")))
+
     def _actualizar_marcas(self):
         img = self.img
         puntos = [img.maximo(), img.minimo(), img.centro()]

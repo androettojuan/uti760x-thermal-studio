@@ -44,6 +44,15 @@ def _parsear_list(linea):
         return None
 
 
+def camara_disponible(host=HOST, puerto=PUERTO, timeout=1.5):
+    """True si el FTP de la camara acepta conexiones (no inicia sesion)."""
+    try:
+        with socket.create_connection((host, int(puerto)), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
 class CameraFTP:
     def __init__(self, host=HOST, puerto=PUERTO, usuario=USUARIO, clave=CLAVE, timeout=10):
         self.host, self.puerto = host, int(puerto)
