@@ -4,7 +4,7 @@ import pytest
 from thermal_studio.core import importer
 from thermal_studio.core.camera_ftp import ArchivoCamara, Cancelado, _parsear_list
 from thermal_studio.core.importer import Modo
-from thermal_studio.core.library import ErrorBiblioteca, Library, fecha_de_nombre
+from thermal_studio.core.library import ErrorBiblioteca, Library, fecha_de_nombre, fecha_visible
 
 A = ArchivoCamara("IMG20260611212820HD.jpg", 10)
 B = ArchivoCamara("IMG20260618195947HD.jpg", 20)
@@ -43,12 +43,15 @@ def test_parsear_list_de_la_camara():
 def test_fecha_de_nombre():
     assert fecha_de_nombre("IMG20260611212820HD.jpg") == "2026-06-11"
     assert fecha_de_nombre("foto.jpg") is None
+    assert fecha_visible("2026-08-28") == "28/08/2026"
+    assert fecha_visible("Tablero A") == "Tablero A"
 
 
 def test_carpetas(lib):
     lib.crear_carpeta("", "Subestación Norte")
     lib.crear_carpeta("Subestación Norte", "Tablero A")
-    assert lib.todas_las_carpetas() == ["Subestación Norte", "Subestación Norte/Tablero A"]
+    assert lib.todas_las_carpetas() == ["Importadas", "Subestación Norte",
+                                        "Subestación Norte/Tablero A"]
     assert lib.renombrar_carpeta("Subestación Norte/Tablero A", "Tablero B") == \
         "Subestación Norte/Tablero B"
     with pytest.raises(ErrorBiblioteca):
@@ -59,8 +62,14 @@ def test_carpetas(lib):
         lib.crear_carpeta("", "CON")
     with pytest.raises(ErrorBiblioteca):
         lib.abs("../afuera")
-    # la carpeta interna no aparece
+    # la carpeta interna no aparece; la de importacion siempre existe y esta protegida
     assert ".thermal_studio" not in lib.subcarpetas()
+    assert "Importadas" in lib.subcarpetas()
+    for op in (lambda: lib.renombrar_carpeta("Importadas", "X"),
+               lambda: lib.eliminar_carpeta("Importadas"),
+               lambda: lib.mover_carpeta("Importadas", "Subestación Norte")):
+        with pytest.raises(ErrorBiblioteca):
+            op()
 
 
 def test_no_elimina_carpetas_con_fotos(lib):
@@ -70,7 +79,7 @@ def test_no_elimina_carpetas_con_fotos(lib):
         lib.eliminar_carpeta("Tablero")
     (lib.abs("Tablero") / "IMG1.jpg").unlink()
     lib.eliminar_carpeta("Tablero")
-    assert lib.subcarpetas() == []
+    assert lib.subcarpetas() == ["Importadas"]
 
 
 def test_mover_carpeta_dentro_de_si_misma_falla(lib):
@@ -122,3 +131,16 @@ def test_cancelar_deja_registrado_lo_ya_bajado(lib):
         importer.ejecutar(plan, cam, lib, progreso=lambda *a: n.append(1),
                           cancelado=lambda: len(n) >= 1)
     assert set(lib.registro()) == {A.nombre}
+
+
+def test_fecha_vacia_de_importadas_se_borra_y_las_del_usuario_no(lib):
+    fecha = lib.abs("Importadas") / "2026-06-11"
+    fecha.mkdir()
+    (fecha / "a.jpg").write_bytes(b"1")
+    lib.crear_carpeta("", "Subestaciones")
+    lib.crear_carpeta("Subestaciones", "Norte")
+    lib.mover_fotos([fecha / "a.jpg"], "Subestaciones/Norte")
+    assert not fecha.exists()
+    lib.crear_carpeta("", "Otra")
+    lib.mover_fotos([lib.abs("Subestaciones/Norte") / "a.jpg"], "Otra")
+    assert lib.abs("Subestaciones/Norte").exists()

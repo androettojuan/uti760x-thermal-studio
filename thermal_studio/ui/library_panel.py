@@ -11,7 +11,7 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.importer import Modo
-from ..core.library import CARPETA_IMPORTADAS, ErrorBiblioteca, es_foto
+from ..core.library import CARPETA_IMPORTADAS, ErrorBiblioteca, es_foto, fecha_visible
 from ..core.thermal_image import _fecha_desde_nombre
 from . import sistema
 from .import_worker import HiloDescarga, HiloPlan
@@ -58,8 +58,12 @@ class ArbolCarpetas(QTreeWidget):
         return [MIME_CARPETA, "text/uri-list"]
 
     def _destino(self, ev):
+        """Carpeta donde se suelta; "" (nivel principal) si es una carpeta
+        soltada en el espacio vacio; None si no se puede soltar ahi."""
         it = self.itemAt(ev.position().toPoint())
-        return None if it is None else it.data(0, ROL_REL)
+        if it is not None:
+            return it.data(0, ROL_REL)
+        return "" if ev.mimeData().hasFormat(MIME_CARPETA) else None
 
     def dragEnterEvent(self, ev):
         md = ev.mimeData()
@@ -73,8 +77,6 @@ class ArbolCarpetas(QTreeWidget):
         if destino is None:
             ev.ignore()
             return
-        it = self.itemAt(ev.position().toPoint())
-        self.setCurrentItem(it, 0, self.selectionModel().SelectionFlag.NoUpdate)
         ev.acceptProposedAction()
 
     def dropEvent(self, ev):
@@ -248,7 +250,7 @@ class LibraryPanel(QWidget):
         elif cancelado:
             self.mensaje.emit("Importación cancelada. " + texto)
         else:
-            self.mensaje.emit(texto + " Están en «%s»." % CARPETA_IMPORTADAS)
+            self.mensaje.emit(texto + " Están en «%s»." % self.NOMBRE_IMPORTADAS)
 
     def _error_camara(self, msg):
         self._hilo = None
@@ -282,18 +284,29 @@ class LibraryPanel(QWidget):
             self._hilo.wait(15000)
 
     # == carpetas ============================================================
+    # El arbol no muestra la raiz de la biblioteca: arriba de todo va
+    # "Termografias" (la carpeta donde cae lo importado) y despues, al mismo
+    # nivel, las carpetas del usuario con todas las subcarpetas que quiera.
+    NOMBRE_IMPORTADAS = "Termografías"
+
     def _crear_carpetas(self):
         w = QWidget()
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
+        v.addWidget(QLabel("<b>Carpetas</b>"))
         h = QHBoxLayout()
-        h.addWidget(QLabel("<b>Carpetas</b>"), 1)
-        for texto, tip, fn in (("+ Nueva", "Crear una carpeta dentro de la seleccionada", self.nueva_carpeta),
-                               ("Renombrar", "", self.renombrar_carpeta),
-                               ("Eliminar", "Eliminar la carpeta (solo si no tiene fotos)", self.eliminar_carpeta)):
-            b = QPushButton(texto)
-            b.setToolTip(tip)
-            b.clicked.connect(fn)
+        self.btn_carpeta = QPushButton("+ Carpeta")
+        self.btn_carpeta.setToolTip("Crear una carpeta principal, por ejemplo «Subestaciones»")
+        self.btn_carpeta.clicked.connect(self.nueva_carpeta)
+        self.btn_subcarpeta = QPushButton("+ Subcarpeta")
+        self.btn_subcarpeta.setToolTip("Crear una carpeta dentro de la seleccionada")
+        self.btn_subcarpeta.clicked.connect(self.nueva_subcarpeta)
+        self.btn_renombrar = QPushButton("Renombrar")
+        self.btn_renombrar.clicked.connect(self.renombrar_carpeta)
+        self.btn_eliminar = QPushButton("Eliminar")
+        self.btn_eliminar.setToolTip("Eliminar la carpeta (solo si no tiene fotos)")
+        self.btn_eliminar.clicked.connect(self.eliminar_carpeta)
+        for b in (self.btn_carpeta, self.btn_subcarpeta, self.btn_renombrar, self.btn_eliminar):
             h.addWidget(b)
         v.addLayout(h)
 
@@ -302,46 +315,70 @@ class LibraryPanel(QWidget):
         self.arbol.fotosSoltadas.connect(self._fotos_soltadas)
         self.arbol.carpetaSoltada.connect(self._carpeta_soltada)
         self.arbol.customContextMenuRequested.connect(self._menu_arbol)
+        self.arbol.itemCollapsed.connect(lambda it: self._colapsadas.add(it.data(0, ROL_REL)))
+        self.arbol.itemExpanded.connect(lambda it: self._colapsadas.discard(it.data(0, ROL_REL)))
+        self._colapsadas = set()  # todo arranca abierto; se recuerda lo que el usuario cierra
         v.addWidget(self.arbol)
         return w
+
+    def nombre_visible(self, rel):
+        """Ruta relativa como se muestra: «Importadas/2026-08-28» se ve como
+        «Termografías/28/08/2026»."""
+        partes = rel.split("/")
+        if partes[0] == CARPETA_IMPORTADAS:
+            partes = [self.NOMBRE_IMPORTADAS] + [fecha_visible(p) for p in partes[1:]]
+        return " › ".join(partes)
 
     def set_biblioteca(self, biblioteca):
         self.bib = biblioteca
         self.miniaturas.set_cache(biblioteca.miniaturas)
         self.carpeta_actual = None
+        self._colapsadas = set()
         self.refrescar()
 
     def refrescar(self):
-        """Rearma el arbol conservando la carpeta elegida y las expandidas."""
+        """Rearma el arbol conservando la carpeta elegida y lo que estaba cerrado."""
         actual = self.carpeta_actual
-        expandidas = {it.data(0, ROL_REL) for it in self._items_arbol() if it.isExpanded()}
         self.arbol.blockSignals(True)
         self.arbol.clear()
         conteos = self._conteos()
-        raiz = QTreeWidgetItem([self._etiqueta(self.bib.raiz.name, conteos.get("", 0))])
-        raiz.setData(0, ROL_REL, "")
-        raiz.setToolTip(0, str(self.bib.raiz))
-        self.arbol.addTopLevelItem(raiz)
+        estilo = self.style()
+        ico_carpeta = estilo.standardIcon(estilo.StandardPixmap.SP_DirIcon)
+        ico_importadas = estilo.standardIcon(estilo.StandardPixmap.SP_DriveHDIcon)
 
-        def agregar(padre, rel):
-            for nombre in self.bib.subcarpetas(rel):
-                r = "%s/%s" % (rel, nombre) if rel else nombre
-                it = QTreeWidgetItem([self._etiqueta(nombre, conteos.get(r, 0))])
-                it.setData(0, ROL_REL, r)
+        def agregar(padre, rel, nombre, icono, protegida=False):
+            it = QTreeWidgetItem([self._etiqueta(nombre, conteos.get(rel, 0))])
+            it.setData(0, ROL_REL, rel)
+            it.setIcon(0, icono)
+            if protegida:
+                it.setFlags(it.flags() & ~Qt.ItemIsDragEnabled)
+                it.setToolTip(0, "Acá llegan las fotos importadas de la cámara, por fecha")
+            if padre is None:
+                self.arbol.addTopLevelItem(it)
+            else:
                 padre.addChild(it)
-                agregar(it, r)
-                it.setExpanded(r in expandidas)
-        agregar(raiz, "")
-        raiz.setExpanded(True)
+            subs = self.bib.subcarpetas(rel)
+            if rel == CARPETA_IMPORTADAS:
+                subs = sorted(subs, reverse=True)  # fechas AAAA-MM-DD: la mas nueva arriba
+            for sub in subs:
+                visible = fecha_visible(sub) if rel == CARPETA_IMPORTADAS else sub
+                agregar(it, "%s/%s" % (rel, sub), visible, ico_carpeta)
+            it.setExpanded(rel not in self._colapsadas)
+            return it
+
+        agregar(None, CARPETA_IMPORTADAS, self.NOMBRE_IMPORTADAS, ico_importadas, protegida=True)
+        for nombre in self.bib.subcarpetas(""):
+            if nombre != CARPETA_IMPORTADAS:
+                agregar(None, nombre, nombre, ico_carpeta)
         self.arbol.blockSignals(False)
-        self.seleccionar_carpeta(actual if actual is not None else "", forzar=True)
+        self.seleccionar_carpeta(actual or CARPETA_IMPORTADAS, forzar=True)
 
     def _conteos(self):
         """{carpeta relativa: fotos en ella y sus subcarpetas}."""
         conteos = {}
         for p in self.bib.indice().values():
             partes = Path(self.bib.rel(p.parent)).parts if p.parent != self.bib.raiz else ()
-            for k in range(len(partes) + 1):
+            for k in range(1, len(partes) + 1):
                 key = "/".join(partes[:k])
                 conteos[key] = conteos.get(key, 0) + 1
         return conteos
@@ -372,18 +409,21 @@ class LibraryPanel(QWidget):
                     self.arbol.setCurrentItem(it)
                     self._carpeta_elegida(it)
                 return
-        if rel:
-            self.seleccionar_carpeta("", forzar)
+        if rel != CARPETA_IMPORTADAS:
+            self.seleccionar_carpeta(CARPETA_IMPORTADAS, forzar)
 
     def _carpeta_elegida(self, item, *_):
         if item is None:
             return
         self.carpeta_actual = item.data(0, ROL_REL)
+        protegida = self.bib.es_protegida(self.carpeta_actual)
+        self.btn_renombrar.setEnabled(not protegida)
+        self.btn_eliminar.setEnabled(not protegida)
         self._cargar_galeria()
 
     def _rel_seleccionada(self):
         it = self.arbol.currentItem()
-        return it.data(0, ROL_REL) if it else ""
+        return it.data(0, ROL_REL) if it else None
 
     def _intentar(self, fn, *args):
         try:
@@ -394,21 +434,29 @@ class LibraryPanel(QWidget):
             QMessageBox.warning(self, "Carpetas", "No se pudo completar la operación:\n%s" % e)
         return None
 
-    def nueva_carpeta(self):
-        padre = self._rel_seleccionada()
-        nombre, ok = QInputDialog.getText(
-            self, "Nueva carpeta",
-            "Nombre de la carpeta nueva dentro de «%s»:" % (padre or self.bib.raiz.name))
+    def _crear(self, padre, pregunta):
+        nombre, ok = QInputDialog.getText(self, "Nueva carpeta", pregunta)
         if ok and nombre.strip():
             rel = self._intentar(self.bib.crear_carpeta, padre, nombre)
             if rel is not None:
+                self._colapsadas.discard(padre)
                 self.carpeta_actual = rel
                 self.refrescar()
 
+    def nueva_carpeta(self):
+        self._crear("", "Nombre de la carpeta nueva (por ejemplo «Subestaciones»):")
+
+    def nueva_subcarpeta(self):
+        padre = self._rel_seleccionada()
+        if padre is None:
+            QMessageBox.information(self, "Carpetas",
+                                    "Elegí primero la carpeta donde va la subcarpeta.")
+            return
+        self._crear(padre, "Nombre de la carpeta nueva dentro de «%s»:" % self.nombre_visible(padre))
+
     def renombrar_carpeta(self):
         rel = self._rel_seleccionada()
-        if not rel:
-            QMessageBox.information(self, "Carpetas", "Elegí la carpeta que querés renombrar.")
+        if rel is None or self.bib.es_protegida(rel):
             return
         nombre, ok = QInputDialog.getText(self, "Renombrar carpeta", "Nombre nuevo:",
                                           text=Path(rel).name)
@@ -420,20 +468,22 @@ class LibraryPanel(QWidget):
 
     def eliminar_carpeta(self):
         rel = self._rel_seleccionada()
-        if not rel:
-            QMessageBox.information(self, "Carpetas", "Elegí la carpeta que querés eliminar.")
+        if rel is None or self.bib.es_protegida(rel):
             return
-        r = QMessageBox.question(self, "Eliminar carpeta", "¿Eliminar la carpeta «%s»?" % rel)
+        r = QMessageBox.question(self, "Eliminar carpeta",
+                                 "¿Eliminar la carpeta «%s»?" % self.nombre_visible(rel))
         if r == QMessageBox.Yes and self._intentar(self.bib.eliminar_carpeta, rel) is None:
-            self.carpeta_actual = rel.rsplit("/", 1)[0] if "/" in rel else ""
+            self.carpeta_actual = rel.rsplit("/", 1)[0] if "/" in rel else None
             self.refrescar()
 
     def _fotos_soltadas(self, rutas, destino):
+        if not destino:
+            return  # las fotos van siempre dentro de alguna carpeta
         nuevas = self._intentar(self.bib.traer_fotos, rutas, destino)
         if nuevas is not None:
             self.refrescar()
             self.mensaje.emit("%d foto%s en «%s»." % (len(nuevas), "" if len(nuevas) == 1 else "s",
-                                                     destino or self.bib.raiz.name))
+                                                     self.nombre_visible(destino)))
 
     def _carpeta_soltada(self, rel, destino):
         nuevo = self._intentar(self.bib.mover_carpeta, rel, destino)
@@ -443,16 +493,17 @@ class LibraryPanel(QWidget):
 
     def _menu_arbol(self, pos):
         it = self.arbol.itemAt(pos)
+        m = QMenu(self)
+        m.addAction("Nueva carpeta principal…", self.nueva_carpeta)
         if it:
             self.arbol.setCurrentItem(it)
-        m = QMenu(self)
-        m.addAction("Nueva carpeta…", self.nueva_carpeta)
-        if it and it.data(0, ROL_REL):
-            m.addAction("Renombrar…", self.renombrar_carpeta)
-            m.addAction("Eliminar", self.eliminar_carpeta)
-        m.addSeparator()
-        m.addAction("Mostrar en el Explorador",
-                    lambda: sistema.mostrar_en_explorador(self.bib.abs(self._rel_seleccionada())))
+            m.addAction("Nueva subcarpeta…", self.nueva_subcarpeta)
+            if not self.bib.es_protegida(it.data(0, ROL_REL)):
+                m.addAction("Renombrar…", self.renombrar_carpeta)
+                m.addAction("Eliminar", self.eliminar_carpeta)
+            m.addSeparator()
+            m.addAction("Mostrar en el Explorador",
+                        lambda: sistema.mostrar_en_explorador(self.bib.abs(it.data(0, ROL_REL))))
         m.exec(self.arbol.viewport().mapToGlobal(pos))
 
     # == galeria =============================================================
@@ -475,24 +526,23 @@ class LibraryPanel(QWidget):
         self.miniaturas.cancelar_pendientes()
         self.galeria.clear()
         self._items_galeria = {}
-        rel = self.carpeta_actual or ""
+        rel = self.carpeta_actual or CARPETA_IMPORTADAS
         try:
             fotos = self.bib.fotos(rel)
+            n_sub = len(self.bib.subcarpetas(rel))
         except (ErrorBiblioteca, OSError):
-            fotos = []
-        n_sub = len(self.bib.subcarpetas(rel)) if fotos == [] else 0
+            fotos, n_sub = [], 0
+        titulo = self.nombre_visible(rel)
         if fotos:
             self.lbl_galeria.setText("<b>%s</b> — %d foto%s"
-                                     % (rel or self.bib.raiz.name, len(fotos),
-                                        "" if len(fotos) == 1 else "s"))
+                                     % (titulo, len(fotos), "" if len(fotos) == 1 else "s"))
         elif n_sub:
-            self.lbl_galeria.setText("<b>%s</b> — sin fotos sueltas; abrí una subcarpeta"
-                                     % (rel or self.bib.raiz.name))
+            self.lbl_galeria.setText("<b>%s</b> — elegí una subcarpeta para ver sus fotos" % titulo)
         else:
-            self.lbl_galeria.setText("<b>%s</b> — vacía" % (rel or self.bib.raiz.name))
+            self.lbl_galeria.setText("<b>%s</b> — vacía" % titulo)
         for p in fotos:
             fecha = _fecha_desde_nombre(p.name)
-            texto = fecha.strftime("%d/%m/%y %H:%M") if fecha else p.stem
+            texto = fecha.strftime("%d/%m/%Y %H:%M") if fecha else p.stem
             it = QListWidgetItem(self._icono_vacio, texto)
             it.setData(ROL_RUTA, str(p))
             it.setToolTip(p.name)
@@ -531,11 +581,11 @@ class LibraryPanel(QWidget):
         m.exec(self.galeria.viewport().mapToGlobal(pos))
 
     def mover_a_carpeta(self, rutas):
-        raiz = self.bib.raiz.name
-        opciones = [raiz] + self.bib.todas_las_carpetas()
-        actual = self.carpeta_actual or ""
+        carpetas = self.bib.todas_las_carpetas()
+        visibles = [self.nombre_visible(c) for c in carpetas]
+        actual = carpetas.index(self.carpeta_actual) if self.carpeta_actual in carpetas else 0
         elegida, ok = QInputDialog.getItem(
             self, "Mover fotos", "Mover %d foto%s a:" % (len(rutas), "" if len(rutas) == 1 else "s"),
-            opciones, opciones.index(actual) if actual in opciones else 0, False)
+            visibles, actual, False)
         if ok:
-            self._fotos_soltadas(rutas, "" if elegida == raiz else elegida)
+            self._fotos_soltadas(rutas, carpetas[visibles.index(elegida)])

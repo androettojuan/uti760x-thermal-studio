@@ -48,6 +48,19 @@ def es_foto(path):
     return path.is_file() and path.suffix.lower() in EXTENSIONES
 
 
+_RE_CARPETA_FECHA = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
+
+
+def fecha_visible(nombre_carpeta):
+    """'2026-08-28' -> '28/08/2026'; cualquier otro nombre queda igual.
+
+    En disco las carpetas de fecha van como AAAA-MM-DD (Windows no acepta "/"
+    y asi se ordenan solas); en pantalla se muestran dd/mm/aaaa.
+    """
+    m = _RE_CARPETA_FECHA.match(nombre_carpeta)
+    return "%s/%s/%s" % (m.group(3), m.group(2), m.group(1)) if m else nombre_carpeta
+
+
 def fecha_de_nombre(nombre):
     """'IMG20260611212820HD.jpg' -> '2026-06-11', o None."""
     m = _RE_FECHA.search(nombre)
@@ -65,6 +78,7 @@ class Library:
         self.interna.mkdir(exist_ok=True)
         self.miniaturas = self.interna / "miniaturas"
         self.miniaturas.mkdir(exist_ok=True)
+        (self.raiz / CARPETA_IMPORTADAS).mkdir(exist_ok=True)
         self._registro_path = self.interna / "importadas.json"
 
     # -- rutas -------------------------------------------------------------
@@ -108,9 +122,13 @@ class Library:
         p.mkdir(parents=True)
         return self.rel(p)
 
+    def es_protegida(self, rel):
+        """La raiz y la carpeta de importacion no se renombran, borran ni mueven."""
+        return rel in ("", CARPETA_IMPORTADAS)
+
     def renombrar_carpeta(self, rel, nombre):
-        if not rel:
-            raise ErrorBiblioteca("No se puede renombrar la carpeta principal.")
+        if self.es_protegida(rel):
+            raise ErrorBiblioteca("Esta carpeta no se puede renombrar.")
         nombre = validar_nombre(nombre)
         p = self.abs(rel)
         nuevo = p.with_name(nombre)
@@ -121,8 +139,8 @@ class Library:
 
     def eliminar_carpeta(self, rel):
         """Solo borra carpetas sin fotos (puede tener subcarpetas vacias)."""
-        if not rel:
-            raise ErrorBiblioteca("No se puede eliminar la carpeta principal.")
+        if self.es_protegida(rel):
+            raise ErrorBiblioteca("Esta carpeta no se puede eliminar.")
         p = self.abs(rel)
         n = sum(1 for f in p.rglob("*") if es_foto(f))
         if n:
@@ -131,8 +149,8 @@ class Library:
         shutil.rmtree(p)
 
     def mover_carpeta(self, rel, destino_rel):
-        if not rel:
-            raise ErrorBiblioteca("No se puede mover la carpeta principal.")
+        if self.es_protegida(rel):
+            raise ErrorBiblioteca("Esta carpeta no se puede mover.")
         p, dest = self.abs(rel), self.abs(destino_rel)
         if dest == p or p in dest.parents:
             raise ErrorBiblioteca("No se puede mover una carpeta dentro de sí misma.")
@@ -175,7 +193,15 @@ class Library:
             final = self._nombre_libre(dest / src.name)
             shutil.move(str(src), str(final))
             nuevas.append(final)
+            self._limpiar_fecha_vacia(src.parent)
         return nuevas
+
+    def _limpiar_fecha_vacia(self, carpeta):
+        """Borra una carpeta de fecha de Importadas que quedo vacia."""
+        importadas = (self.raiz / CARPETA_IMPORTADAS).resolve()
+        carpeta = carpeta.resolve()
+        if carpeta.parent == importadas and not any(carpeta.iterdir()):
+            carpeta.rmdir()
 
     def traer_fotos(self, paths, destino_rel):
         """Como mover_fotos, pero las que vienen de fuera de la biblioteca se copian."""

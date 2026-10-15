@@ -248,17 +248,11 @@ class MainWindow(QMainWindow):
         tb.setMovable(False)
         self.addToolBar(tb)
 
-        importar = QAction("⬇ Importar de la cámara", self,
-                           triggered=lambda: self.importar(Modo.FALTANTES))
-        importar.setToolTip("Traer las fotos nuevas de la cámara por WiFi (Ctrl+I)")
-        tb.addAction(importar)
-        tb.addSeparator()
-        abrir = QAction("Abrir…", self, triggered=self.dialogo_abrir)
         self.act_ant = QAction("◀ Anterior", self, shortcut=Qt.Key_Left,
                                triggered=lambda: self._navegar(-1))
         self.act_sig = QAction("Siguiente ▶", self, shortcut=Qt.Key_Right,
                                triggered=lambda: self._navegar(1))
-        for a in (abrir, self.act_ant, self.act_sig):
+        for a in (self.act_ant, self.act_sig):
             tb.addAction(a)
         # Las flechas solo navegan con el foco en el visor; en el arbol y la
         # galeria siguen moviendo la seleccion
