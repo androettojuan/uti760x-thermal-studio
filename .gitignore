@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# Editores
+.idea/
+
+# Fotos y notas locales (no se publican)
+fotos/
+other/
+
+# Salida de PyInstaller / Inno Setup
+build/
+dist/
