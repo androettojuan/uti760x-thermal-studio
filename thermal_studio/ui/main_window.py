@@ -13,7 +13,7 @@ from ..core import camera_ftp, palettes
 from ..core.importer import Modo
 from ..core.library import Library
 from ..core.thermal_image import ThermalImage
-from ..core.uti760x import FormatoInvalido
+from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
 from .library_panel import LibraryPanel
 from .viewer import ThermalViewer, fmt_temp
@@ -167,10 +167,16 @@ class PanelInfo(QScrollArea):
 
     def _pintar_aviso(self, img):
         aviso = "Precisión de la conversión a grados: ±%.1f °C típico." % img.incertidumbre_c
-        if img.fuera_de_rango:
+        if img.rango_alto:
+            aviso = ("<b style='color:%s'>⚠ Rango alto sin calibrar</b><br>La foto se sacó en el "
+                     "rango de temperatura alto de la cámara, que el programa todavía no sabe "
+                     "convertir. Las temperaturas que ves no son confiables."
+                     % theme.color("aviso"))
+        elif img.fuera_de_rango:
+            lo, hi = TempConverter.RANGO_VALIDADO_C
             aviso = ("<b style='color:%s'>⚠ Fuera del rango calibrado</b><br>La imagen tiene "
-                     "temperaturas fuera de −13 a 52 °C; los valores extremos son aproximados."
-                     "<br><br>%s" % (theme.color("aviso"), aviso))
+                     "temperaturas fuera de %d a %d °C; los valores extremos son aproximados."
+                     "<br><br>%s" % (theme.color("aviso"), lo, hi, aviso))
         self.aviso.setText(aviso)
 
     def set_cursor(self, fila, col, temp):

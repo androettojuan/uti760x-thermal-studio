@@ -81,3 +81,16 @@ def test_rechaza_archivos_que_no_son_de_la_camara(tmp_path):
     assert not es_uti760x(falso)
     with pytest.raises(FormatoInvalido):
         ThermalImage.abrir(falso)
+
+
+def test_conversion_corrige_por_temperatura_del_sensor():
+    # Lecturas de la pantalla de la camara: el mismo crudo vale distinto
+    # segun realFPA (sin la correccion, la primera daba 15 C)
+    casos = [  # raw, realFPA, C en pantalla
+        (3998, 37.31, 31.5),  # IMG20261015225351, max
+        (6818, 37.90, 81.1),  # IMG20261015230357, max
+        (6157, 21.03, 51.6),  # IMG20260611213042, max
+    ]
+    for raw, fpa, esperado in casos:
+        assert TempConverter.to_celsius(raw, fpa) == pytest.approx(
+            esperado, abs=TempConverter.ERROR_MAX_C)

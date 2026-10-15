@@ -27,32 +27,49 @@ class FormatoInvalido(ValueError):
 class TempConverter:
     """Convierte los uint16 de tempData a grados Celsius.
 
-    Cubica global ajustada sobre tres LUT exactas (export CSV del software de
-    UNI-T). No hay una curva unica exacta para todas las imagenes: entre fotos
-    hay hasta 1.35 C de variacion que nada en el archivo explica. Ver
-    other/fase0/unit760x.py para el analisis completo.
+    tempData no es absoluto: el mismo objeto da valores crudos distintos
+    segun la temperatura del sensor (`realFPA`). Con el sensor a 37 C en vez
+    de 20 C, una curva sin esa correccion erraba 15 C. Por eso el modelo es
+    una cubica en el crudo mas un termino lineal en FPA y uno cruzado:
 
-        rango cubierto : raw 2786..6157  (-13.5 a 51.6 C)
-        rms            : 0.43 C
-        error maximo   : 0.93 C
+        r = (raw - 4000) / 1000      f = (fpa - 25) / 10
+        T = c0 + c1 r + c2 r^2 + c3 r^3 + c4 f + c5 f r
+
+    Ajustado sobre 222 lecturas del overlay de la camara (max/min de 164 fotos,
+    del 11/06/2026 al 15/10/2026) mas las LUT exactas de tres export CSV del
+    software de UNI-T. Queda una variacion de foto a foto que nada en el
+    archivo explica (ver other/fase0/HALLAZGOS_760X.md).
+
+        rango cubierto : raw 2444..6818 (-19 a 81 C), FPA 16..38.5 C
+        rms            : 0.49 C
+        error maximo   : 1.32 C
+
+    Solo vale para el rango normal (tempMode 0); el rango alto (tempMode 1)
+    no esta calibrado.
     """
 
-    COEF = (-75.21962706155418, 0.01763571385387947,
-            2.6184492414457977e-06, -3.466733210211375e-10)
-    RANGO_VALIDADO = (2786, 6157)
-    ERROR_TIPICO_C = 0.43
-    ERROR_MAX_C = 0.93
+    COEF = (19.20393422468132, 20.662431662218864, -2.4116198956989052,
+            0.28904251532211234, 9.870617581758466, 1.1091388133918052)
+    RANGO_VALIDADO = (2444, 6818)
+    RANGO_VALIDADO_C = (-19, 81)
+    FPA_VALIDADO = (16.0, 38.5)
+    FPA_POR_DEFECTO = 25.0
+    ERROR_TIPICO_C = 0.49
+    ERROR_MAX_C = 1.32
 
     @classmethod
-    def to_celsius(cls, raw):
-        c0, c1, c2, c3 = cls.COEF
-        r = np.asarray(raw, dtype=np.float64)
-        return c0 + r * (c1 + r * (c2 + r * c3))
+    def to_celsius(cls, raw, fpa=None):
+        c0, c1, c2, c3, c4, c5 = cls.COEF
+        r = (np.asarray(raw, dtype=np.float64) - 4000) / 1000
+        f = ((cls.FPA_POR_DEFECTO if fpa is None else fpa) - 25) / 10
+        return c0 + c4 * f + r * (c1 + c5 * f + r * (c2 + r * c3))
 
     @classmethod
-    def fuera_de_rango(cls, raw_min, raw_max):
+    def fuera_de_rango(cls, raw_min, raw_max, fpa=None):
         lo, hi = cls.RANGO_VALIDADO
-        return raw_min < lo or raw_max > hi
+        flo, fhi = cls.FPA_VALIDADO
+        return (raw_min < lo or raw_max > hi
+                or (fpa is not None and not flo <= fpa <= fhi))
 
 
 def es_uti760x(path):

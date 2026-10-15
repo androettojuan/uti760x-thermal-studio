@@ -48,14 +48,17 @@ class ThermalImage:
 
     `temps` es float32 (alto, ancho), fila 0 = arriba.
     `incertidumbre_c` es el error tipico de la conversion a grados.
+    `rango_alto`: foto en el rango alto de la camara, que no esta calibrado.
     """
 
     def __init__(self, temps, meta, path=None, fuera_de_rango=False,
-                 incertidumbre_c=TempConverter.ERROR_TIPICO_C, visible_jpeg=None):
+                 incertidumbre_c=TempConverter.ERROR_TIPICO_C, visible_jpeg=None,
+                 rango_alto=False):
         self.temps = np.asarray(temps, dtype=np.float32)
         self.meta = meta
         self.path = Path(path) if path else None
         self.fuera_de_rango = fuera_de_rango
+        self.rango_alto = rango_alto
         self.incertidumbre_c = incertidumbre_c
         self.visible_jpeg = visible_jpeg
 
@@ -79,10 +82,12 @@ class ThermalImage:
             distancia_m=p.get("distance"),
             temp_sensor=p.get("realFPA"),
         )
+        fpa = p.get("realFPA")
         return cls(
-            TempConverter.to_celsius(raw), meta, path=path,
-            fuera_de_rango=TempConverter.fuera_de_rango(int(raw.min()), int(raw.max())),
+            TempConverter.to_celsius(raw, fpa), meta, path=path,
+            fuera_de_rango=TempConverter.fuera_de_rango(int(raw.min()), int(raw.max()), fpa),
             visible_jpeg=f.visible_jpeg(),
+            rango_alto=bool(p.get("tempMode")),
         )
 
     # -- geometria ---------------------------------------------------------

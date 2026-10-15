@@ -1,9 +1,9 @@
 ; Instalador de Windows (Inno Setup 6). Empaqueta dist\ThermalStudio\ (salida de PyInstaller).
-;   iscc /DVersion=0.1.0 packaging\instalador.iss
+;   iscc /DVersion=0.1.1 packaging\instalador.iss
 ; Se instala por usuario, sin pedir permisos de administrador.
 
 #ifndef Version
-  #define Version "0.1.0"
+  #define Version "0.1.1"
 #endif
 
 [Setup]
