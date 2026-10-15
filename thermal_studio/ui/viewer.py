@@ -14,9 +14,15 @@ COLOR_MIN = "#3d9bff"
 COLOR_CENTRO = "#ffffff"
 
 
-def _colormap(paleta, invertir):
+CONTRASTE_CAMARA = "camara"   # colores repartidos segun el histograma
+CONTRASTE_LINEAL = "lineal"   # escala pareja entre minima y maxima
+
+
+def _colormap(paleta, invertir, posiciones=None):
     lut = palettes.get(paleta, invertir)
-    return pg.ColorMap(np.linspace(0, 1, len(lut)), lut)
+    if posiciones is None:
+        posiciones = np.linspace(0, 1, len(lut))
+    return pg.ColorMap(posiciones, lut)
 
 
 def fmt_temp(t):
@@ -39,6 +45,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.img = None
         self.paleta = palettes.POR_DEFECTO
         self.invertir = False
+        self.contraste = CONTRASTE_CAMARA
 
         self.vb = self.addViewBox(row=0, col=0)
         self.vb.setAspectLocked(True)
@@ -84,12 +91,17 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
 
     def set_paleta(self, paleta, invertir=False):
         self.paleta, self.invertir = paleta, invertir
-        self.cbar.setColorMap(_colormap(paleta, invertir))
+        self._aplicar_colormap()
+
+    def set_contraste(self, modo):
+        self.contraste = modo
+        self._aplicar_colormap()
 
     def set_rango(self, lo, hi):
         if hi <= lo:
             hi = lo + 0.1
         self.cbar.setLevels((lo, hi))
+        self._aplicar_colormap()
 
     def rango(self):
         return tuple(float(v) for v in self.cbar.levels())
@@ -100,6 +112,16 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
             t.setVisible(visible)
 
     # -- interno -----------------------------------------------------------
+    def _aplicar_colormap(self):
+        """En modo camara el reparto de colores depende de la imagen y del
+        rango, asi que se rearma cada vez que cambia alguno de los dos."""
+        posiciones = None
+        if self.contraste == CONTRASTE_CAMARA and self.img is not None:
+            lo, hi = self.rango()
+            n = len(palettes.get(self.paleta, self.invertir))
+            posiciones = self.img.posiciones_ecualizadas(lo, hi, n)
+        self.cbar.setColorMap(_colormap(self.paleta, self.invertir, posiciones))
+
     def _aplicar_tema(self):
         self.setBackground(theme.color("fondo"))
         eje = self.cbar.axis
@@ -146,6 +168,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
                      y + (margen if abajo else -margen))
 
     def _barra_soltada(self, *_):
+        self._aplicar_colormap()
         lo, hi = self.rango()
         self.rangoCambiado.emit(lo, hi)
 

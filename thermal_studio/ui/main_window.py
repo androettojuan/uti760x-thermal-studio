@@ -16,7 +16,7 @@ from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
 from .library_panel import LibraryPanel
-from .viewer import ThermalViewer, fmt_temp
+from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
 from .widgets import (
     boton, boton_icono, etiqueta, marco, pixmap_redondeado, separador, swatch_paleta,
 )
@@ -440,6 +440,22 @@ class MainWindow(QMainWindow):
         h.addWidget(self.btn_invertir)
         h.addWidget(separador())
 
+        # Contraste
+        h.addWidget(etiqueta("Contraste", "suave"))
+        self.combo_contraste = QComboBox()
+        self.combo_contraste.addItem("Como la cámara", CONTRASTE_CAMARA)
+        self.combo_contraste.addItem("Lineal", CONTRASTE_LINEAL)
+        self.combo_contraste.setToolTip(
+            "Como la cámara: reparte los colores según cuánto ocupa cada temperatura en la "
+            "imagen, para ver detalles aunque haya cielo u objetos muy fríos o calientes.\n"
+            "Lineal: escala pareja entre mínima y máxima, para comparar fotos entre sí.\n"
+            "Las temperaturas medidas son las mismas en los dos modos.")
+        guardado = self.settings.value("contraste", CONTRASTE_CAMARA)
+        self.combo_contraste.setCurrentIndex(max(self.combo_contraste.findData(guardado), 0))
+        self.combo_contraste.currentIndexChanged.connect(self._contraste_cambiado)
+        h.addWidget(self.combo_contraste)
+        h.addWidget(separador())
+
         # Rango
         h.addWidget(etiqueta("Rango", "suave"))
         self.spin_lo = self._spin()
@@ -448,7 +464,8 @@ class MainWindow(QMainWindow):
         h.addWidget(etiqueta("–", "suave"))
         h.addWidget(self.spin_hi)
         btn_auto = boton("Auto", "mdi6.arrow-expand-vertical",
-                         tooltip="Ajustar el rango a la mínima y máxima de la imagen (A)")
+                         tooltip="Ajustar el rango a la imagen: hasta la máxima, sin el cielo ni el "
+                         "5 % más frío (A)")
         btn_auto.setShortcut("A")
         btn_auto.clicked.connect(self.rango_auto)
         h.addWidget(btn_auto)
@@ -475,6 +492,7 @@ class MainWindow(QMainWindow):
             theme.CLARO if theme.gestor.nombre == theme.OSCURO else theme.OSCURO))
         h.addWidget(self.btn_tema)
 
+        self.viewer.set_contraste(self.combo_contraste.currentData())
         self._paleta_cambiada()
         self._actualizar_navegacion()
         return barra
@@ -544,6 +562,11 @@ class MainWindow(QMainWindow):
         pid = self.combo_paleta.currentData()
         self.settings.setValue("paleta", pid)
         self.viewer.set_paleta(pid, self.btn_invertir.isChecked())
+
+    def _contraste_cambiado(self, *_):
+        modo = self.combo_contraste.currentData()
+        self.settings.setValue("contraste", modo)
+        self.viewer.set_contraste(modo)
 
     def rango_auto(self):
         if self.img:

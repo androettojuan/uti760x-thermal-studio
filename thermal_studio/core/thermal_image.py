@@ -121,9 +121,52 @@ class ThermalImage:
     def media(self):
         return float(self.temps.mean())
 
+    # Debajo de esto la camara no mide (muestra "<-20,0"): es cielo, casi siempre.
+    PISO_MEDICION_C = -20.0
+    # Fraccion mas fria de lo medible que el rango automatico deja saturada,
+    # para que los bordes del cielo no se coman la paleta.
+    PERCENTIL_BAJO_AUTO = 5.0
+
     def rango_auto(self):
-        """(min, max) de la imagen completa."""
-        return float(self.temps.min()), float(self.temps.max())
+        """(min, max) para la paleta, pensado para que se vean los detalles.
+
+        Con min..max a secas, un 0.3 % de pixeles a -28 C aplastaba un tablero
+        entre 21 y 31 C. Abajo se ignora lo que esta bajo el piso de medicion
+        y el 5 % mas frio del resto. Arriba no se recorta nada, para que el
+        punto caliente nunca quede saturado junto con lo que lo rodea.
+        """
+        hi = float(self.temps.max())
+        medible = self.temps[self.temps >= self.PISO_MEDICION_C]
+        if medible.size == 0:
+            medible = self.temps
+        lo = float(np.percentile(medible, self.PERCENTIL_BAJO_AUTO))
+        return min(lo, hi - 0.1), hi
+
+    # Parte del reparto que sigue siendo lineal al ecualizar, para que un
+    # tramo de temperaturas con pocos pixeles no se quede sin colores
+    MEZCLA_LINEAL = 0.2
+
+    def posiciones_ecualizadas(self, lo, hi, n=256):
+        """Donde poner (0..1 dentro de lo..hi) cada uno de n colores de la paleta.
+
+        Como hace la camara: los colores se reparten segun cuantos pixeles hay
+        en cada temperatura, asi lo que ocupa mas imagen recibe mas colores.
+        La temperatura de cada pixel no cambia; solo el color que le toca.
+        Siempre estrictamente creciente.
+        """
+        lineal = np.linspace(0.0, 1.0, n)
+        dentro = np.sort(self.temps[(self.temps >= lo) & (self.temps <= hi)], axis=None)
+        if hi <= lo or dentro.size < 2:
+            return lineal
+        # Acumulada del histograma mezclada con la de una escala pareja: la
+        # parte lineal la hace estrictamente creciente, asi se puede invertir
+        grilla = np.linspace(0.0, 1.0, 4 * n)
+        acum = np.searchsorted(dentro, lo + grilla * (hi - lo), side="right") / dentro.size
+        acum = (1 - self.MEZCLA_LINEAL) * acum + self.MEZCLA_LINEAL * grilla
+        acum = (acum - acum[0]) / (acum[-1] - acum[0])
+        pos = np.interp(lineal, acum, grilla)
+        pos[0], pos[-1] = 0.0, 1.0
+        return pos
 
     # -- render ------------------------------------------------------------
     def render(self, paleta=palettes.POR_DEFECTO, rango=None, invertir=False):

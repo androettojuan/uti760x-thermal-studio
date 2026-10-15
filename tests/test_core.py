@@ -94,3 +94,26 @@ def test_conversion_corrige_por_temperatura_del_sensor():
     for raw, fpa, esperado in casos:
         assert TempConverter.to_celsius(raw, fpa) == pytest.approx(
             esperado, abs=TempConverter.ERROR_MAX_C)
+
+
+def test_rango_auto_ignora_cielo_y_conserva_el_punto_caliente():
+    temps = np.full((100, 100), 25.0)
+    temps[:30] = -35.0          # cielo, debajo del piso de medicion
+    temps[30, :3] = -28.0       # borde frio suelto
+    temps[50, 50] = 80.0        # punto caliente de un solo pixel
+    lo, hi = ThermalImage(temps, None).rango_auto()
+    assert hi == 80.0
+    assert lo == 25.0
+
+
+def test_ecualizado_da_mas_colores_a_lo_que_ocupa_mas_imagen():
+    temps = np.full((100, 100), 30.0)
+    temps[:, :10] = np.linspace(0, 20, 100)[:, None]  # 10 % de la imagen, 0 a 20 C
+    temps[:, 10:] = 30 + np.linspace(0, 2, 90)[None, :]  # 90 %, entre 30 y 32 C
+    img = ThermalImage(temps, None)
+    pos = img.posiciones_ecualizadas(0.0, 32.0, 256)
+    assert pos[0] == 0.0 and pos[-1] == 1.0
+    assert np.all(np.diff(pos) > 0)
+    # Lineal, 30-32 C tendria 1/16 de los colores; ecualizado, la mayoria
+    en_tramo = np.mean(pos >= 30 / 32)
+    assert en_tramo > 0.6
