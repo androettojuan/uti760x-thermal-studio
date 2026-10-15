@@ -16,7 +16,15 @@ Precisión: la conversión a grados coincide con el export del software de UNI-T
 con un error típico de ±0,4 °C (máximo 0,93 °C) en el rango −13 a 52 °C. Fuera de
 ese rango la app avisa que los valores son aproximados.
 
-### Uso
+### Instalación (Windows)
+
+Descargá `ThermalStudio-X.Y.Z-instalador.exe` desde
+[Releases](https://github.com/androettojuan/uti760x-thermal-studio/releases/latest) y
+ejecutalo. Se instala sin permisos de administrador. Como el instalador no está firmado,
+Windows puede mostrar «Windows protegió su PC»: clic en *Más información* → *Ejecutar de
+todas formas*.
+
+### Desde el código
 
 Requiere Python 3.11 o superior.
 
@@ -26,6 +34,10 @@ python -m venv .venv
 .venv/bin/python -m thermal_studio                # opcional: ruta a una foto .jpg
 .venv/bin/python -m pytest tests                  # tests
 ```
+
+Para publicar una versión: actualizar `__version__` en `thermal_studio/__init__.py` y subir
+la etiqueta `vX.Y.Z`. GitHub Actions compila el instalador y crea el Release
+(`.github/workflows/instalador-windows.yml`).
 
 Para importar desde la cámara: conectá la PC al WiFi de la cámara y activá el FTP
 en la cámara. Por defecto la app usa `192.168.32.1:2121` con usuario y contraseña

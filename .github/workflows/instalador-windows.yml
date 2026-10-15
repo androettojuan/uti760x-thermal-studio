@@ -1,0 +1,71 @@
+# Compila el instalador de Windows.
+# - Al subir una etiqueta vX.Y.Z: publica un Release con el instalador.
+# - A mano (Actions > Instalador Windows > Run workflow): deja el instalador como artefacto.
+name: Instalador Windows
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write  # para crear el Release
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+          cache-dependency-path: |
+            requirements-app.txt
+            packaging/requirements-build.txt
+
+      - name: Dependencias
+        run: pip install -r requirements-app.txt -r packaging/requirements-build.txt
+
+      - name: Tests
+        run: python -m pytest -q tests
+
+      - name: Version
+        id: version
+        shell: pwsh
+        run: |
+          $v = python -c "import thermal_studio; print(thermal_studio.__version__)"
+          if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$v") {
+            throw "La etiqueta $env:GITHUB_REF_NAME no coincide con __version__ = $v"
+          }
+          "version=$v" >> $env:GITHUB_OUTPUT
+
+      - name: Empaquetar con PyInstaller
+        run: pyinstaller --noconfirm --distpath dist --workpath build packaging/thermal_studio.spec
+
+      - name: Instalador con Inno Setup
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress }
+          & $iscc "/DVersion=${{ steps.version.outputs.version }}" packaging\instalador.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup falló" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ThermalStudio-${{ steps.version.outputs.version }}-instalador
+          path: dist/ThermalStudio-*-instalador.exe
+
+      - name: Publicar Release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Thermal Studio ${{ steps.version.outputs.version }}
+          files: dist/ThermalStudio-*-instalador.exe
+          body: |
+            Descargá **ThermalStudio-${{ steps.version.outputs.version }}-instalador.exe** y ejecutalo.
+            Se instala sin permisos de administrador. Requiere Windows 10/11 de 64 bits.
+
+            Windows puede mostrar «Windows protegió su PC» porque el instalador no está firmado:
+            hacé clic en «Más información» → «Ejecutar de todas formas».
