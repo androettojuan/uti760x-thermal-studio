@@ -101,11 +101,14 @@ class ArbolCarpetas(QTreeWidget):
 
 # -- galeria ---------------------------------------------------------------
 class Galeria(QListWidget):
+    MIN_COLUMNAS = 2
+    MARGEN_CELDA = 18   # padding del item + separacion entre celdas
+    ALTO_TEXTO = 38     # renglon con la fecha debajo de la miniatura
+
     def __init__(self):
         super().__init__()
         self.setViewMode(QListWidget.IconMode)
-        self.setIconSize(QSize(TAMANO, int(TAMANO * 0.8)))
-        self.setGridSize(QSize(TAMANO + 18, int(TAMANO * 0.8) + 38))
+        self._ajustar_celdas()
         self.setSpacing(4)
         self.setResizeMode(QListWidget.Adjust)
         self.setMovement(QListWidget.Static)
@@ -116,6 +119,26 @@ class Galeria(QListWidget):
         self.setDragDropMode(QAbstractItemView.DragOnly)
         self.setDefaultDropAction(Qt.MoveAction)
         self.setContextMenuPolicy(Qt.CustomContextMenu)
+
+    def _ajustar_celdas(self):
+        """Reparte el ancho en columnas iguales, con al menos dos.
+
+        Las miniaturas no pasan de TAMANO (el tamano al que se generan),
+        para que no se vean borrosas en paneles anchos.
+        """
+        ancho = max(self.viewport().width() - 2, 1)
+        cols = max(self.MIN_COLUMNAS, ancho // (TAMANO + self.MARGEN_CELDA + self.spacing()))
+        # Qt suma el espaciado alrededor de cada celda de la grilla
+        celda = (ancho - self.spacing() * (cols + 1)) // cols
+        icono = max(min(celda - self.MARGEN_CELDA, TAMANO), 40)
+        grilla = QSize(celda, int(icono * 0.8) + self.ALTO_TEXTO)
+        if grilla != self.gridSize():
+            self.setIconSize(QSize(icono, int(icono * 0.8)))
+            self.setGridSize(grilla)
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._ajustar_celdas()
 
     def mimeData(self, items):
         md = QMimeData()
