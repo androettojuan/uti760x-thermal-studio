@@ -18,7 +18,7 @@ from ..core.uti760x import FormatoInvalido, TempConverter
 from . import ayuda, sistema, theme
 from .compare import DialogoElegirSegunda, VistaComparacion
 from .evolucion_ui import VistaEvolucion
-from .dialogo_informe import ABIERTA, CARPETA, ELEGIDAS, DialogoInforme
+from .dialogo_informe import ABIERTA, CARPETA, CLAVE_BORRADOR, ELEGIDAS, DialogoInforme
 from .informe import Ajustes, generar_pdf, imagen_anotada
 from .mediciones_ui import CapaMediciones, PanelMediciones
 from .library_panel import LibraryPanel
@@ -914,6 +914,7 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar el informe:\n\n%s" % e)
             return
         progreso.setValue(len(rutas) + 1)
+        self.settings.remove(CLAVE_BORRADOR)
         self.statusBar().showMessage("Informe guardado en %s" % destino, 10000)
         sistema.abrir_archivo(destino)
 

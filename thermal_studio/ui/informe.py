@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from datetime import date
 
 import numpy as np
-from PySide6.QtCore import QMarginsF, QPointF, QRectF, Qt
+from PySide6.QtCore import QBuffer, QIODevice, QMarginsF, QPointF, QRectF, Qt
 from PySide6.QtGui import (
     QColor, QFont, QFontMetricsF, QImage, QPageLayout, QPageSize, QPainter, QPdfWriter, QPen,
     QPolygonF,
@@ -43,6 +43,7 @@ class DatosInforme:
     inspector: str = ""
     fecha: date = field(default_factory=date.today)
     incluir_visible: bool = True
+    observaciones: str = ""  # conclusiones y recomendaciones generales
 
 
 # -- imagen anotada --------------------------------------------------------
@@ -159,14 +160,43 @@ def _barra(p, rect, lo, hi, ajustes, pos, escala):
 
 # -- PDF -------------------------------------------------------------------
 class _Pagina:
-    """Ayuda para dibujar en mm sobre el PDF."""
+    """Ayuda para dibujar en mm sobre el PDF, con paginado y pie."""
 
-    def __init__(self, writer, painter):
+    MARGEN_PIE = 14  # mm reservados abajo para el pie
+
+    def __init__(self, writer, painter, datos, total=None):
         self.w, self.p = writer, painter
+        self.datos, self.total = datos, total
+        self.n = 1
         self.dpi = writer.resolution()
         r = writer.pageLayout().paintRectPixels(self.dpi)
         self.ancho_mm = r.width() / self.dpi * 25.4
         self.alto_mm = r.height() / self.dpi * 25.4
+
+    def cabe(self, y, alto):
+        return y + alto <= self.alto_mm - self.MARGEN_PIE
+
+    def nueva_pagina(self):
+        self.pie()
+        self.w.newPage()
+        self.n += 1
+
+    def pie(self):
+        y = self.alto_mm - 6
+        self.linea(0, y - 1.5, self.ancho_mm)
+        self.fuente(7.5, color=GRIS)
+        d = self.datos
+        self.texto(0, y, self.ancho_mm / 2,
+                   d.titulo + (" — " + d.instalacion if d.instalacion else ""))
+        self.texto(self.ancho_mm / 2, y, self.ancho_mm / 2,
+                   "Página %d de %d" % (self.n, self.total) if self.total else "",
+                   alinear=Qt.AlignRight | Qt.AlignTop)
+
+    def alto_texto(self, ancho, texto):
+        """Alto en mm que ocupa el texto envuelto en ese ancho, sin dibujarlo."""
+        caja = QRectF(0, 0, self.mm(ancho), self.mm(1000))
+        r = self.p.boundingRect(caja, int(Qt.AlignLeft | Qt.AlignTop) | int(Qt.TextWordWrap), texto)
+        return r.height() / self.dpi * 25.4
 
     def mm(self, v):
         return v * self.dpi / 25.4
@@ -206,39 +236,44 @@ def _fmt_delta(v):
     return "" if v is None else "%+.1f °C" % v
 
 
-def generar_pdf(path, fotos, datos, ajustes, nombre_lugar=None):
-    """fotos: lista de (ThermalImage, Mediciones). Una carátula y una página
-    por foto. `nombre_lugar(path)` da el nombre visible de la carpeta."""
-    writer = QPdfWriter(str(path))
+def _escritor(destino, titulo):
+    writer = QPdfWriter(destino)
     writer.setResolution(200)
     writer.setPageLayout(QPageLayout(QPageSize(QPageSize.A4), QPageLayout.Portrait,
                                      QMarginsF(15, 15, 15, 15), QPageLayout.Millimeter))
-    writer.setTitle(datos.titulo)
+    writer.setTitle(titulo)
     writer.setCreator("Thermal Studio")
+    return writer
+
+
+def generar_pdf(path, fotos, datos, ajustes, nombre_lugar=None):
+    """fotos: lista de (ThermalImage, Mediciones). Caratula (una o mas paginas,
+    con las observaciones y el resumen) y una pagina por foto.
+    `nombre_lugar(path)` da el nombre visible de la carpeta."""
+    lugar = nombre_lugar or (lambda ruta: fecha_visible(ruta.parent.name))
+
+    # Borrador de la caratula, solo para saber cuantas paginas ocupa y poder
+    # poner "Pagina n de N" en todas
+    buffer = QBuffer()
+    buffer.open(QIODevice.WriteOnly)
+    borrador = _escritor(buffer, datos.titulo)
+    p = QPainter(borrador)
+    pg = _Pagina(borrador, p, datos)
+    _caratula(pg, fotos, datos, lugar)
+    paginas_caratula = pg.n
+    p.end()
+
+    writer = _escritor(str(path), datos.titulo)
     p = QPainter(writer)
     p.setRenderHint(QPainter.Antialiasing)
     p.setRenderHint(QPainter.SmoothPixmapTransform)
-    pg = _Pagina(writer, p)
-    total = len(fotos) + 1
-    lugar = nombre_lugar or (lambda ruta: fecha_visible(ruta.parent.name))
-
+    pg = _Pagina(writer, p, datos, total=paginas_caratula + len(fotos))
     _caratula(pg, fotos, datos, lugar)
-    _pie(pg, 1, total, datos)
-    for i, (img, ms) in enumerate(fotos, start=2):
-        writer.newPage()
+    for img, ms in fotos:
+        pg.nueva_pagina()
         _pagina_foto(pg, img, ms, datos, ajustes, lugar)
-        _pie(pg, i, total, datos)
+    pg.pie()
     p.end()
-
-
-def _pie(pg, n, total, datos):
-    y = pg.alto_mm - 6
-    pg.linea(0, y - 1.5, pg.ancho_mm)
-    pg.fuente(7.5, color=GRIS)
-    pg.texto(0, y, pg.ancho_mm / 2, datos.titulo + (" — " + datos.instalacion
-                                                     if datos.instalacion else ""))
-    pg.texto(pg.ancho_mm / 2, y, pg.ancho_mm / 2, "Página %d de %d" % (n, total),
-             alinear=Qt.AlignRight | Qt.AlignTop)
 
 
 def _caratula(pg, fotos, datos, lugar):
@@ -261,19 +296,45 @@ def _caratula(pg, fotos, datos, lugar):
         y += max(pg.texto(45, y, pg.ancho_mm - 45, valor, envolver=True), 6) + 1.5
     y += 8
 
-    # Resumen: una fila por foto
-    pg.fuente(9, True, ACENTO)
-    pg.texto(0, y, pg.ancho_mm, "RESUMEN")
-    y += 7
+    # Observaciones generales del inspector, por parrafos (pueden seguir en
+    # la pagina siguiente)
+    obs = [par.strip() for par in datos.observaciones.strip().split("\n") if par.strip()]
+    if obs:
+        pg.fuente(9, True, ACENTO)
+        pg.texto(0, y, pg.ancho_mm, "OBSERVACIONES")
+        y += 7
+        pg.fuente(10.5)
+        for par in obs:
+            alto = pg.alto_texto(pg.ancho_mm, par)
+            if not pg.cabe(y, alto):
+                pg.nueva_pagina()
+                y = 0
+                pg.fuente(10.5)
+            y += pg.texto(0, y, pg.ancho_mm, par, envolver=True) + 2.5
+        y += 6
+
+    # Resumen: una fila por foto (puede seguir en la pagina siguiente)
     cols = [(0, "Fecha"), (32, "Lugar"), (100, "Máxima"), (125, "Mayor ΔT"), (152, "Mediciones")]
-    pg.fuente(8.5, True, GRIS)
-    for x, t in cols:
-        pg.texto(x, y, 40, t)
-    y += 5.5
-    pg.linea(0, y - 1, pg.ancho_mm, GRIS)
+
+    def encabezado(y, sigue=False):
+        pg.fuente(9, True, ACENTO)
+        pg.texto(0, y, pg.ancho_mm, "RESUMEN (continuación)" if sigue else "RESUMEN")
+        y += 7
+        pg.fuente(8.5, True, GRIS)
+        for x, t in cols:
+            pg.texto(x, y, 40, t)
+        y += 5.5
+        pg.linea(0, y - 1, pg.ancho_mm, GRIS)
+        return y
+
+    if not pg.cabe(y, 25):
+        pg.nueva_pagina()
+        y = 0
+    y = encabezado(y)
     for img, ms in fotos:
-        if y > pg.alto_mm - 20:
-            break
+        if not pg.cabe(y, 6):
+            pg.nueva_pagina()
+            y = encabezado(0, sigue=True)
         filas = resultados(ms, img.temps)
         deltas = [r.delta_t for r in filas if r.delta_t is not None]
         mayor = max(deltas, key=abs) if deltas else None
@@ -290,12 +351,16 @@ def _caratula(pg, fotos, datos, lugar):
         y += 6
         pg.linea(0, y - 1.2, pg.ancho_mm)
     y += 6
+    nota = ("ΔT: máxima de cada medición menos la máxima de la medición de referencia de "
+            "la misma foto. Temperaturas calculadas por Thermal Studio a partir de los "
+            "datos radiométricos de la cámara: ±%.1f °C típico en el rango normal."
+            % TempConverter.ERROR_TIPICO_C)
     pg.fuente(8, color=GRIS)
-    pg.texto(0, y, pg.ancho_mm,
-             "ΔT: máxima de cada medición menos la máxima de la medición de referencia de "
-             "la misma foto. Temperaturas calculadas por Thermal Studio a partir de los "
-             "datos radiométricos de la cámara: ±%.1f °C típico en el rango normal."
-             % TempConverter.ERROR_TIPICO_C, envolver=True)
+    if not pg.cabe(y, pg.alto_texto(pg.ancho_mm, nota)):
+        pg.nueva_pagina()
+        y = 0
+        pg.fuente(8, color=GRIS)
+    pg.texto(0, y, pg.ancho_mm, nota, envolver=True)
 
 
 def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
