@@ -28,41 +28,48 @@ class TempConverter:
     """Convierte los uint16 de tempData a grados Celsius.
 
     tempData no es absoluto: el mismo objeto da valores crudos distintos
-    segun la temperatura del sensor (`realFPA`). Con el sensor a 37 C en vez
-    de 20 C, una curva sin esa correccion erraba 15 C. Por eso el modelo es
-    una cubica en el crudo mas un termino lineal en FPA y uno cruzado:
+    segun la temperatura del sensor (`realFPA`). Se usa la forma de Planck
+    (la de las camaras FLIR), con un corrimiento y una ganancia que dependen
+    de la temperatura del sensor:
 
-        r = (raw - 4000) / 1000      f = (fpa - 25) / 10
-        T = c0 + c1 r + c2 r^2 + c3 r^3 + c4 f + c5 f r
+        f = (fpa - 25) / 10
+        raw = R (1 + g f) / (exp(B / T_K) - F) + O0 + O1 f + O2 f^2
 
-    Ajustado sobre 222 lecturas del overlay de la camara (max/min de 164 fotos,
-    del 11/06/2026 al 15/10/2026) mas las LUT exactas de tres export CSV del
-    software de UNI-T. Queda una variacion de foto a foto que nada en el
-    archivo explica (ver other/fase0/HALLAZGOS_760X.md).
+    La forma fisica importa arriba de 80 C: una cubica (la version anterior)
+    extrapolaba mal y daba 104,7 C donde la camara mostraba 95,9 C.
 
-        rango cubierto : raw 2444..6818 (-19 a 81 C), FPA 16..38.5 C
-        rms            : 0.49 C
-        error maximo   : 1.32 C
+    Ajustado (other/fase0/calibrar.py) sobre 231 lecturas de la pantalla de
+    la camara (164 fotos del 11/06/2026 al 16/10/2026), las LUT exactas de
+    tres export CSV del software de UNI-T y la tabla de calibracion de
+    fabrica que trae cada foto (lensInfo: lenGray a setTemp, -10 a 120 C).
 
-    Solo vale para el rango normal (tempMode 0); el rango alto (tempMode 1)
-    no esta calibrado.
+        rango cubierto : raw 2444..9519 (-19 a 120 C), FPA 16..40.3 C
+        rms            : 0.54 C
+        error maximo   : 2.25 C (una sola lectura; el resto, menos de 1.7 C)
+
+    Queda una variacion de foto a foto que nada en el archivo explica (ver
+    other/fase0/HALLAZGOS_760X.md). Solo vale para el rango normal
+    (tempMode 0); el rango alto (tempMode 1) no esta calibrado.
     """
 
-    COEF = (19.20393422468132, 20.662431662218864, -2.4116198956989052,
-            0.28904251532211234, 9.870617581758466, 1.1091388133918052)
-    RANGO_VALIDADO = (2444, 6818)
-    RANGO_VALIDADO_C = (-19, 81)
-    FPA_VALIDADO = (16.0, 38.5)
+    # B, ln R, F, O0, O1, g, O2
+    COEF = (1351.103153798388, 12.585501412974049, 3.8891654787114636,
+            1018.357799552193, -62.820145097462074, -0.13790084958359833,
+            33.81255527376433)
+    RANGO_VALIDADO = (2444, 9519)
+    RANGO_VALIDADO_C = (-19, 120)
+    FPA_VALIDADO = (16.0, 40.3)
     FPA_POR_DEFECTO = 25.0
-    ERROR_TIPICO_C = 0.49
-    ERROR_MAX_C = 1.32
+    ERROR_TIPICO_C = 0.54
+    ERROR_MAX_C = 2.25
 
     @classmethod
     def to_celsius(cls, raw, fpa=None):
-        c0, c1, c2, c3, c4, c5 = cls.COEF
-        r = (np.asarray(raw, dtype=np.float64) - 4000) / 1000
+        b, ln_r, f_planck, o0, o1, g, o2 = cls.COEF
         f = ((cls.FPA_POR_DEFECTO if fpa is None else fpa) - 25) / 10
-        return c0 + c4 * f + r * (c1 + c5 * f + r * (c2 + r * c3))
+        corrimiento = o0 + o1 * f + o2 * f * f
+        neto = np.maximum(np.asarray(raw, dtype=np.float64) - corrimiento, 1e-3)
+        return b / np.log(np.exp(ln_r) * (1 + g * f) / neto + f_planck) - 273.15
 
     @classmethod
     def fuera_de_rango(cls, raw_min, raw_max, fpa=None):

@@ -83,6 +83,12 @@ def test_rechaza_archivos_que_no_son_de_la_camara(tmp_path):
         ThermalImage.abrir(falso)
 
 
+def test_conversion_es_monotona_en_todo_el_rango():
+    raw = np.arange(1400, 16000, 5)
+    for fpa in (10, 16, 25, 38, 45):
+        assert np.all(np.diff(TempConverter.to_celsius(raw, fpa)) > 0)
+
+
 def test_conversion_corrige_por_temperatura_del_sensor():
     # Lecturas de la pantalla de la camara: el mismo crudo vale distinto
     # segun realFPA (sin la correccion, la primera daba 15 C)
@@ -90,6 +96,8 @@ def test_conversion_corrige_por_temperatura_del_sensor():
         (3998, 37.31, 31.5),  # IMG20261015225351, max
         (6818, 37.90, 81.1),  # IMG20261015230357, max
         (6157, 21.03, 51.6),  # IMG20260611213042, max
+        (9519, 22.71, 95.9),  # IMG20261016102003, max (la cubica daba 104,7)
+        (8020, 22.71, 77.5),  # IMG20261016102003, centro
     ]
     for raw, fpa, esperado in casos:
         assert TempConverter.to_celsius(raw, fpa) == pytest.approx(
