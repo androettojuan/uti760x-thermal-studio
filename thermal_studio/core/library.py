@@ -270,9 +270,9 @@ class Library:
         return Mediciones.desde_dict(d)
 
     def guardar_mediciones(self, nombre_foto, mediciones):
-        """Guarda (o borra, si quedo vacia) la lista de mediciones de una foto."""
+        """Guarda (o borra, si no quedo nada) las mediciones y notas de una foto."""
         destino = self._ruta_mediciones(nombre_foto)
-        if not mediciones.lista:
+        if mediciones.vacia():
             destino.unlink(missing_ok=True)
             return
         destino.parent.mkdir(exist_ok=True)

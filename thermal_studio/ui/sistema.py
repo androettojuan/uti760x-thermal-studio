@@ -58,6 +58,18 @@ def mostrar_en_explorador(ruta):
         QDesktopServices.openUrl(QUrl.fromLocalFile(str(ruta if ruta.is_dir() else ruta.parent)))
 
 
+def abrir_archivo(ruta):
+    """Abre el archivo con el programa predeterminado (por ejemplo, un PDF)."""
+    ruta = Path(ruta)
+    try:
+        if es_wsl():
+            subprocess.Popen(["explorer.exe", _wslpath("-w", ruta)])
+            return
+    except (OSError, subprocess.SubprocessError):
+        pass
+    QDesktopServices.openUrl(QUrl.fromLocalFile(str(ruta)))
+
+
 # -- WiFi --------------------------------------------------------------------
 # En Windows (y desde WSL) se usa netsh; en Linux, NetworkManager (nmcli).
 _RE_SSID = re.compile(r"^\s*SSID\s*:\s*(.+?)\s*$", re.MULTILINE)

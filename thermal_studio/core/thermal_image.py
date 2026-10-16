@@ -152,13 +152,16 @@ class ThermalImage:
         return posiciones_ecualizadas(self.temps, lo, hi, n, self.MEZCLA_LINEAL)
 
     # -- render ------------------------------------------------------------
-    def render(self, paleta=palettes.POR_DEFECTO, rango=None, invertir=False):
+    def render(self, paleta=palettes.POR_DEFECTO, rango=None, invertir=False,
+               posiciones=None):
         """Imagen RGB uint8 (alto, ancho, 3) con la paleta aplicada.
 
         Lo que queda fuera de `rango` se satura al color del extremo.
+        `posiciones` (de posiciones_ecualizadas) reparte los colores como en
+        el modo "Como la camara"; sin eso, la escala es lineal.
         """
         lo, hi = rango or self.rango_auto()
-        lut = palettes.get(paleta, invertir)
+        lut = tabla_colores(paleta, invertir, posiciones)
         span = max(hi - lo, 1e-6)
         idx = np.clip((self.temps - lo) / span * (len(lut) - 1), 0, len(lut) - 1)
         return lut[idx.astype(np.intp)]
@@ -194,3 +197,17 @@ def rango_auto_conjunto(imagenes):
     """Rango automatico que abarca a todas: para verlas con la misma escala."""
     rangos = [img.rango_auto() for img in imagenes]
     return min(lo for lo, _ in rangos), max(hi for _, hi in rangos)
+
+
+
+def tabla_colores(paleta, invertir=False, posiciones=None, n=256):
+    """Tabla (n, 3) uint8 de color por valor normalizado 0..1, como la arma el
+    visor: con `posiciones`, el color k de la paleta va en posiciones[k]."""
+    lut = palettes.get(paleta, invertir)
+    if posiciones is None:
+        if len(lut) == n:
+            return lut
+        posiciones = np.linspace(0.0, 1.0, len(lut))
+    x = np.linspace(0.0, 1.0, n)
+    return np.stack([np.interp(x, posiciones, lut[:, c]) for c in range(3)],
+                    axis=1).round().astype(np.uint8)

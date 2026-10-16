@@ -115,6 +115,10 @@ class Mediciones:
 
     lista: list = field(default_factory=list)
     referencia: str | None = None  # nombre de la medicion de referencia
+    notas: str = ""                # observaciones del inspector sobre la foto
+
+    def vacia(self):
+        return not self.lista and not self.notas.strip()
 
     def nombre_nuevo(self, tipo):
         """P1, P2... / L1... / A1...: el siguiente numero libre de ese tipo."""
@@ -164,6 +168,7 @@ class Mediciones:
         return {
             "version": VERSION_FORMATO,
             "referencia": self.referencia,
+            "notas": self.notas,
             "mediciones": [{"tipo": m.tipo, "nombre": m.nombre, "geom": m.geom}
                            for m in self.lista],
         }
@@ -180,4 +185,31 @@ class Mediciones:
                 continue
         ref = d.get("referencia")
         out.referencia = ref if out.buscar(ref) else None
+        out.notas = d.get("notas") if isinstance(d.get("notas"), str) else ""
         return out
+
+
+@dataclass
+class Resultado:
+    """Una fila de la tabla de mediciones, lista para mostrar o exportar."""
+    nombre: str
+    tipo: str
+    maxima: float
+    minima: float
+    media: float
+    delta_t: float | None
+    es_referencia: bool
+
+
+NOMBRES_TIPO = {PUNTO: "Punto", LINEA: "Línea", AREA: "Área"}
+
+
+def resultados(mediciones, temps):
+    """Estadistica y Delta T de cada medicion, en el orden de la lista."""
+    out = []
+    for m in mediciones.lista:
+        e = estadistica(m, temps)
+        out.append(Resultado(m.nombre, m.tipo, e.maxima, e.minima, e.media,
+                             mediciones.delta_t(m, temps),
+                             m.nombre == mediciones.referencia))
+    return out

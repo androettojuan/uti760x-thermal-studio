@@ -1,15 +1,15 @@
 """Ventana principal: biblioteca | visor | datos, con barra de herramientas arriba."""
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt, Signal
+from PySide6.QtCore import QSettings, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QButtonGroup, QScrollArea, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QPlainTextEdit, QProgressDialog, QScrollArea, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget,
 )
 
-from ..core import camera_ftp, palettes
+from ..core import camera_ftp, exportar, palettes
 from ..core.importer import Modo
 from ..core.library import Library
 from ..core.mediciones import AREA, LINEA, PUNTO
@@ -17,6 +17,8 @@ from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
 from .compare import DialogoElegirSegunda, VistaComparacion
+from .dialogo_informe import ABIERTA, CARPETA, ELEGIDAS, DialogoInforme
+from .informe import Ajustes, generar_pdf, imagen_anotada
 from .mediciones_ui import CapaMediciones, PanelMediciones
 from .library_panel import LibraryPanel
 from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
@@ -162,6 +164,13 @@ class PanelInfo(QScrollArea):
         lay.addSpacing(4)
         self.mediciones = PanelMediciones()
         lay.addWidget(self.mediciones)
+
+        lay.addWidget(etiqueta("NOTAS", "seccion"))
+        self.notas = QPlainTextEdit()
+        self.notas.setPlaceholderText("Observaciones sobre esta foto. Se guardan solas y "
+                                      "salen en el informe.")
+        self.notas.setFixedHeight(90)
+        lay.addWidget(self.notas)
 
         # Parametros
         lay.addSpacing(4)
@@ -403,6 +412,11 @@ class MainWindow(QMainWindow):
         m.addAction("Mostrar biblioteca en el Explorador",
                     lambda: sistema.mostrar_en_explorador(self.biblioteca.raiz))
         m.addSeparator()
+        m.addAction("Crear informe PDF…", self.crear_informe).setShortcut(QKeySequence.Print)
+        m.addAction("Exportar imagen con mediciones (PNG)…", self.exportar_png)
+        m.addAction("Exportar mediciones (CSV)…", self.exportar_csv_mediciones)
+        m.addAction("Exportar todas las temperaturas (CSV)…", self.exportar_csv_temperaturas)
+        m.addSeparator()
         m.addAction("Salir", self.close).setShortcut(QKeySequence.Quit)
 
         m = mb.addMenu("&Cámara")
@@ -517,6 +531,9 @@ class MainWindow(QMainWindow):
                 ev.ignore()
                 return
         self.panel_bib.detener()
+        if self._timer_notas.isActive():
+            self._timer_notas.stop()
+            self._guardar_mediciones()
         self.settings.setValue("divisores", self.split.saveState())
         super().closeEvent(ev)
 
@@ -544,6 +561,10 @@ class MainWindow(QMainWindow):
                                   tooltip="Comparar la foto abierta con otra del mismo lugar (C)")
         self.btn_comparar.clicked.connect(self.comparar_con_otra)
         h.addWidget(self.btn_comparar)
+        btn_informe = boton("Informe", "mdi6.file-document-outline",
+                            tooltip="Crear un informe PDF con las fotos, mediciones y notas (Ctrl+P)")
+        btn_informe.clicked.connect(self.crear_informe)
+        h.addWidget(btn_informe)
         h.addWidget(separador())
 
         # Paleta
@@ -672,6 +693,10 @@ class MainWindow(QMainWindow):
             return False
 
         rango = self.viewer.rango() if (self.btn_fijar.isChecked() and self.img) else None
+        # Las notas pendientes son de la foto que se deja: guardarlas antes de cambiar
+        if self._timer_notas.isActive():
+            self._timer_notas.stop()
+            self._guardar_mediciones()
         self.img = img
         self.area_visor.mostrar_visor()
         self.viewer.mostrar(img, rango)
@@ -679,6 +704,9 @@ class MainWindow(QMainWindow):
         mediciones = self.biblioteca.leer_mediciones(path.name)
         self.capa.set_mediciones(mediciones)
         self.panel.mediciones.set_datos(mediciones, img.temps)
+        self.panel.notas.blockSignals(True)
+        self.panel.notas.setPlainText(mediciones.notas)
+        self.panel.notas.blockSignals(False)
         if self._ventana_visible is not None and self._ventana_visible.isVisible():
             self._actualizar_visible()
         self._sincronizar_spins()
@@ -717,6 +745,14 @@ class MainWindow(QMainWindow):
         panel.renombrar.connect(self._renombrar_medicion)
         panel.borrar.connect(self.borrar_medicion)
         panel.referenciaCambiada.connect(self._referencia_cambiada)
+        # Las notas se guardan un rato despues de dejar de escribir
+        self._timer_notas = QTimer(self, singleShot=True, interval=700)
+        self._timer_notas.timeout.connect(self._guardar_mediciones)
+        self.panel.notas.textChanged.connect(self._notas_cambiadas)
+
+    def _notas_cambiadas(self):
+        self.capa.mediciones.notas = self.panel.notas.toPlainText()
+        self._timer_notas.start()
 
     def set_herramienta(self, herramienta):
         if self.area_visor.comparando() and herramienta is not None:
@@ -762,6 +798,119 @@ class MainWindow(QMainWindow):
             self.biblioteca.guardar_mediciones(self.img.path.name, self.capa.mediciones)
         except OSError as e:
             self.statusBar().showMessage("No se pudieron guardar las mediciones: %s" % e, 10000)
+
+    # -- informe y exportacion ---------------------------------------------
+    def _ajustes_imagen(self):
+        """Paleta, contraste y (si esta fijado) rango que el usuario esta viendo."""
+        return Ajustes(paleta=self.combo_paleta.currentData(),
+                       invertir=self.btn_invertir.isChecked(),
+                       ecualizar=self.combo_contraste.currentData() == CONTRASTE_CAMARA,
+                       rango=self.viewer.rango() if self.btn_fijar.isChecked() else None)
+
+    def _nombre_lugar(self, ruta):
+        try:
+            return self.panel_bib.nombre_visible(self.biblioteca.rel(ruta.parent))
+        except ValueError:
+            return ruta.parent.name
+
+    def _pedir_destino(self, titulo, sugerido, filtro):
+        carpeta = self.settings.value("ultima_exportacion", str(sistema.documentos()))
+        ruta, _ = QFileDialog.getSaveFileName(self, titulo, str(Path(carpeta) / sugerido), filtro)
+        if ruta:
+            self.settings.setValue("ultima_exportacion", str(Path(ruta).parent))
+        return Path(ruta) if ruta else None
+
+    def _requiere_foto(self):
+        if self.img is None or self.area_visor.comparando():
+            QMessageBox.information(self, APP_NOMBRE, "Abrí una foto primero.")
+            return False
+        return True
+
+    def crear_informe(self):
+        elegidas = self.panel_bib.galeria.rutas_seleccionadas()
+        carpeta_rel = self.panel_bib.carpeta_actual
+        try:
+            en_carpeta = self.biblioteca.fotos(carpeta_rel) if carpeta_rel else []
+        except OSError:
+            en_carpeta = []
+        opciones = [
+            (ELEGIDAS, "Las fotos elegidas en la galería", len(elegidas) if len(elegidas) > 1 else 0),
+            (ABIERTA, "Solo la foto abierta", 1 if self.img and self.img.path else 0),
+            (CARPETA, "Toda la carpeta «%s»" % self.panel_bib.nombre_visible(carpeta_rel)
+             if carpeta_rel else "Toda la carpeta", len(en_carpeta)),
+        ]
+        sugerida = Path(carpeta_rel).name if carpeta_rel and not carpeta_rel.startswith(
+            "Importadas") else ""
+        d = DialogoInforme(opciones, sugerida, self)
+        if not d.exec():
+            return
+        fuente = d.fuente()
+        rutas = {ELEGIDAS: elegidas, ABIERTA: [self.img.path] if self.img else [],
+                 CARPETA: en_carpeta}[fuente]
+        datos = d.datos()
+        nombre = "Informe %s %s.pdf" % (datos.instalacion or datos.titulo,
+                                        datos.fecha.strftime("%d-%m-%Y"))
+        destino = self._pedir_destino("Guardar informe", nombre.replace("/", "-"), "PDF (*.pdf)")
+        if destino is None:
+            return
+        self._guardar_mediciones()  # que entren las notas recien escritas
+
+        progreso = QProgressDialog("Preparando el informe…", "Cancelar", 0, len(rutas) + 1, self)
+        progreso.setWindowTitle(APP_NOMBRE)
+        progreso.setMinimumDuration(300)
+        fotos = []
+        for i, ruta in enumerate(sorted(rutas, key=lambda r: Path(r).name)):
+            progreso.setValue(i)
+            if progreso.wasCanceled():
+                return
+            try:
+                fotos.append((ThermalImage.abrir(ruta), self.biblioteca.leer_mediciones(Path(ruta).name)))
+            except (FormatoInvalido, OSError) as e:
+                self.statusBar().showMessage("Se salteó %s: %s" % (Path(ruta).name, e), 8000)
+        progreso.setLabelText("Escribiendo el PDF…")
+        progreso.setValue(len(rutas))
+        try:
+            generar_pdf(destino, fotos, datos, self._ajustes_imagen(), self._nombre_lugar)
+        except OSError as e:
+            progreso.close()
+            QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar el informe:\n\n%s" % e)
+            return
+        progreso.setValue(len(rutas) + 1)
+        self.statusBar().showMessage("Informe guardado en %s" % destino, 10000)
+        sistema.abrir_archivo(destino)
+
+    def exportar_png(self):
+        if not self._requiere_foto():
+            return
+        destino = self._pedir_destino("Exportar imagen", self.img.path.stem + ".png", "PNG (*.png)")
+        if destino and not imagen_anotada(self.img, self.capa.mediciones,
+                                          self._ajustes_imagen()).save(str(destino)):
+            QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar la imagen.")
+
+    def exportar_csv_mediciones(self):
+        if not self._requiere_foto():
+            return
+        if not self.capa.mediciones.lista:
+            QMessageBox.information(self, APP_NOMBRE, "Esta foto no tiene mediciones todavía.")
+            return
+        destino = self._pedir_destino("Exportar mediciones", self.img.path.stem + " mediciones.csv",
+                                      "CSV (*.csv)")
+        if destino:
+            try:
+                exportar.csv_mediciones(destino, self.img, self.capa.mediciones)
+            except OSError as e:
+                QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar:\n\n%s" % e)
+
+    def exportar_csv_temperaturas(self):
+        if not self._requiere_foto():
+            return
+        destino = self._pedir_destino("Exportar temperaturas",
+                                      self.img.path.stem + " temperaturas.csv", "CSV (*.csv)")
+        if destino:
+            try:
+                exportar.csv_temperaturas(destino, self.img.temps)
+            except OSError as e:
+                QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar:\n\n%s" % e)
 
     # -- comparacion -------------------------------------------------------
     def comparar_seleccionadas(self):

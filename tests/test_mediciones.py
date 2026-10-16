@@ -105,3 +105,41 @@ def test_archivo_con_basura_no_impide_leer(tmp_path):
     ms = Mediciones.desde_dict(d)
     assert [m.nombre for m in ms.lista] == ["P1"]
     assert ms.referencia is None
+
+
+def test_notas_se_guardan_aunque_no_haya_mediciones(tmp_path):
+    bib = Library(tmp_path)
+    ms = Mediciones(notas="Borne R flojo, ajustar")
+    bib.guardar_mediciones("IMG1.jpg", ms)
+    assert bib.leer_mediciones("IMG1.jpg").notas == "Borne R flojo, ajustar"
+    bib.guardar_mediciones("IMG1.jpg", Mediciones(notas="   "))
+    assert not list(bib.carpeta_mediciones.glob("*.json"))
+
+
+def test_csv_de_mediciones_para_excel_en_castellano(tmp_path, temps):
+    from thermal_studio.core.exportar import csv_mediciones
+    from thermal_studio.core.thermal_image import ThermalImage
+    img = ThermalImage(temps, type("M", (), {"fecha": None, "emisividad": 0.95})())
+    ms = Mediciones(notas="Revisar")
+    ms.agregar(PUNTO, [30.5, 10.5])
+    ms.agregar(AREA, [49, 29, 61, 36])
+    ms.referencia = "A1"
+    destino = tmp_path / "m.csv"
+    csv_mediciones(destino, img, ms)
+    texto = destino.read_text(encoding="utf-8-sig")
+    assert "P1;Punto;45,0;45,0;45,0;10,0;" in texto
+    assert "A1;Área;35,0;" in texto and texto.count(";sí") == 1
+    assert "Notas;Revisar" in texto
+
+
+def test_render_ecualizado_usa_las_posiciones():
+    from thermal_studio.core.thermal_image import ThermalImage, tabla_colores
+    t = np.linspace(0, 10, 100).reshape(10, 10)
+    img = ThermalImage(t, None)
+    lineal = img.render("white_hot", rango=(0, 10))
+    assert np.array_equal(tabla_colores("white_hot"), tabla_colores("white_hot", posiciones=None))
+    # Todo el contraste en la mitad baja: un pixel a 2,5 C queda mucho mas claro
+    pos = np.concatenate([np.linspace(0, 0.5, 200), np.linspace(0.5, 1, 57)[1:]])
+    eq = img.render("white_hot", rango=(0, 10), posiciones=pos)
+    f, c = np.unravel_index(np.argmin(np.abs(t - 2.5)), t.shape)
+    assert int(eq[f, c, 0]) > int(lineal[f, c, 0]) + 25
