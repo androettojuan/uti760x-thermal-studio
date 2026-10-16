@@ -6,8 +6,8 @@ cerrado por un footer de 24 bytes:
 
     [JPEG completo ... FFD9][JSON UTF-8][uint32 len_json][20 bytes "UTi760X"]
 
-Version numpy de other/fase0/unit760x.py; ver ahi el detalle de cada campo y
-de como se valido el formato.
+Detalle de cada campo y de como se valido el formato en
+docs/formato_uti760x.md.
 """
 import base64
 import json
@@ -38,7 +38,7 @@ class TempConverter:
     La forma fisica importa arriba de 80 C: una cubica (la version anterior)
     extrapolaba mal y daba 104,7 C donde la camara mostraba 95,9 C.
 
-    Ajustado (other/fase0/calibrar.py) sobre 231 lecturas de la pantalla de
+    Ajustado (herramientas/calibracion/calibrar.py) sobre 231 lecturas de la pantalla de
     la camara (164 fotos del 11/06/2026 al 16/10/2026), las LUT exactas de
     tres export CSV del software de UNI-T y la tabla de calibracion de
     fabrica que trae cada foto (lensInfo: lenGray a setTemp, -10 a 120 C).
@@ -48,7 +48,7 @@ class TempConverter:
         error maximo   : 2.25 C (una sola lectura; el resto, menos de 1.7 C)
 
     Queda una variacion de foto a foto que nada en el archivo explica (ver
-    other/fase0/HALLAZGOS_760X.md). Solo vale para el rango normal
+    docs/formato_uti760x.md). Solo vale para el rango normal
     (tempMode 0); el rango alto (tempMode 1) no esta calibrado.
     """
 
