@@ -56,6 +56,20 @@ def planck(p, r, f):
     s = np.exp(lnR) * (1 + g1 * fs) / np.maximum(r - (O0 + O1 * fs), 1e-3) + Fc
     return B / np.log(np.maximum(s, 1 + 1e-9)) - 273.15
 
+def planck7(p, r, f):
+    # La que usa el programa (TempConverter): corrimiento con termino en fs^2
+    B, lnR, Fc, O0, O1, g1, O2 = p[:7]
+    fs = (f - 25) / 10
+    s = np.exp(lnR) * (1 + g1 * fs) / np.maximum(r - (O0 + O1 * fs + O2 * fs**2), 1e-3) + Fc
+    return B / np.log(np.maximum(s, 1 + 1e-9)) - 273.15
+
+def planck8(p, r, f):
+    # + ganancia cuadratica en fs
+    B, lnR, Fc, O0, O1, g1, O2, g2 = p
+    fs = (f - 25) / 10
+    s = np.exp(lnR) * (1 + g1 * fs + g2 * fs**2) / np.maximum(r - (O0 + O1 * fs + O2 * fs**2), 1e-3) + Fc
+    return B / np.log(np.maximum(s, 1 + 1e-9)) - 273.15
+
 def lm(fun, p0, r, f, t, w, it=400):
     p = np.array(p0, float); lam = 1e-2
     def res(p): return (fun(p, r, f) - t) * np.sqrt(w)
@@ -76,22 +90,24 @@ def lm(fun, p0, r, f, t, w, it=400):
         if np.abs(dp).max() < 1e-10: break
     return p
 
+from thermal_studio.core.uti760x import TempConverter
 modelos = {
-    "cubica": (cubica, [19.2, 20.66, -2.41, 0.289, 9.87, 1.11]),
-    "planck": (planck, [1400.0, np.log(4e5), 1.0, 0.0, -300.0, 0.0]),
+    "actual": (planck8, list(TempConverter.COEF)),   # sin reajustar: como esta hoy
+    "planck7": (planck7, list(TempConverter.COEF)),
+    "planck8": (planck8, list(TempConverter.COEF) + [0.0]),
 }
 mejor = {}
 for nombre, (fun, p0) in modelos.items():
-    p = lm(fun, p0, R, F, T, W)
+    p = np.array(p0) if nombre == "actual" else lm(fun, p0, R, F, T, W)
     if nombre == "planck":  # varios arranques de B
         cand = [lm(fun, [B, np.log(4e5 * B / 1400), 1.0, 0.0, -300.0, 0.0], R, F, T, W) for B in (900, 1200, 1400, 1700, 2200)]
         p = min(cand + [p], key=lambda q: np.nansum(W * (fun(q, R, F) - T) ** 2))
     e = fun(p, R, F) - T
     lodo = []
-    for d in np.unique(DIA[lect]):
+    for d in ([] if nombre == "actual" else np.unique(DIA[lect])):
         m = DIA != d; q = lm(fun, p, R[m], F[m], T[m], W[m], it=150)
         mm = (DIA == d) & lect; lodo += list(fun(q, R[mm], F[mm]) - T[mm])
-    lodo = np.array(lodo)
+    lodo = np.array(lodo) if lodo else np.zeros(1)
     print("        fabrica err", [round(float(x), 1) for x in e[fab]])
     peores = np.argsort(-np.abs(np.where(lect, e, 0)))[:4]
     print("        peores", [(round(float(R[i])), round(float(F[i]), 1), T[i], round(float(e[i]), 2)) for i in peores])
@@ -104,4 +120,8 @@ for nombre, (fun, p0) in modelos.items():
           "(setTemp -10 0 20 75 120 / recTemp -6.95 0.67 16.74 65.58 106.18)")
     mejor[nombre] = p
     print("        params", [repr(float(x)) for x in p])
-print("Pegar en TempConverter.COEF (variante con O2) despues de reajustar.")
+    for lo, hi in ((15, 20), (20, 25), (25, 29), (29, 33), (33, 39)):
+        m = lect & (F >= lo) & (F < hi)
+        if m.any():
+            print("        FPA %d-%d: n=%3d sesgo %+.2f rms %.2f" % (lo, hi, m.sum(), e[m].mean(), np.sqrt((e[m]**2).mean())))
+print("Pegar en TempConverter.COEF los params de planck8 despues de reajustar.")

@@ -100,6 +100,7 @@ def test_conversion_corrige_por_temperatura_del_sensor():
         (6157, 21.03, 51.6),  # IMG20260611213042, max
         (9519, 22.71, 95.9),  # IMG20261016102003, max (la cubica daba 104,7)
         (8020, 22.71, 77.5),  # IMG20261016102003, centro
+        (2633, 30.35, -9.0),  # IMG20261016105023 (congelador), centro
     ]
     for raw, fpa, esperado in casos:
         assert TempConverter.to_celsius(raw, fpa) == pytest.approx(

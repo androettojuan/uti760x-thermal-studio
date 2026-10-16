@@ -161,3 +161,17 @@ FPA 22.7) daba 104.7 C con la camara en 95.9. Cambios:
   ya no por indice) y herramientas/calibracion/calibrar.py para reajustar.
 - Pendiente: lenGray12..16 (2318, 2636, 3349, 6239, 9516) parece otra tabla
   (otra FPA u otro rango); sin identificar.
+
+## 2026-10-16 — Congelador y ganancia segun FPA
+
+Cuatro fotos de un congelador (-11 a +10 C) con el sensor a 30,4 C, una zona de
+FPA sin datos hasta entonces. El modelo de 7 parametros daba ~0,7 C menos que
+la pantalla, parejo en todo el rango de la foto. Se agrego un termino de
+ganancia cuadratico en FPA (8 parametros): rms 0,55 -> 0,47 C, maximo 2,25 ->
+1,31 C, validacion dejando un dia afuera 2,40 -> 1,66 C.
+
+El sesgo por FPA no tiene tendencia (-0,4 / +0,3 / -0,3 / -0,7 / +0,1 C en
+tramos de 16 a 39 C) y las 12 lecturas nuevas son de una sola sesion de 20 s:
+es la variacion entre sesiones ya conocida (hasta ~1 C), probablemente la
+autocalibracion del obturador. Para separarla de un efecto real de FPA hacen
+falta mas sesiones con el sensor entre 29 y 36 C.
