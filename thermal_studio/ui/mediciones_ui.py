@@ -345,6 +345,7 @@ class PanelMediciones(QWidget):
         v.addWidget(self.grafico)
         theme.al_cambiar(self._aplicar_tema)
         self._actualizar_visibilidad()
+        self._actualizar_perfil()
 
     # -- API ---------------------------------------------------------------
     def set_datos(self, mediciones, temps):

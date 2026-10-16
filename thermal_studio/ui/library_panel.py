@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QFrame, QHBoxLayout, QInputDialog, QListWidget, QListWidgetItem, QMenu,
@@ -126,7 +126,9 @@ class Galeria(QListWidget):
         Las miniaturas no pasan de TAMANO (el tamano al que se generan),
         para que no se vean borrosas en paneles anchos.
         """
-        ancho = max(self.viewport().width() - 2, 1)
+        # Margen de seguridad: si la suma justa no entra por un pixel, Qt
+        # pasa la segunda foto al renglon de abajo
+        ancho = max(self.viewport().width() - 8, 1)
         cols = max(self.MIN_COLUMNAS, ancho // (TAMANO + self.MARGEN_CELDA + self.spacing()))
         # Qt suma el espaciado alrededor de cada celda de la grilla
         celda = (ancho - self.spacing() * (cols + 1)) // cols
@@ -135,10 +137,18 @@ class Galeria(QListWidget):
         if grilla != self.gridSize():
             self.setIconSize(QSize(icono, int(icono * 0.8)))
             self.setGridSize(grilla)
+            self.doItemsLayout()
 
     def resizeEvent(self, ev):
         super().resizeEvent(ev)
         self._ajustar_celdas()
+
+    def viewportEvent(self, ev):
+        # El area visible tambien cambia sola (aparece o se va la barra de
+        # desplazamiento) sin que cambie el tamano del widget
+        if ev.type() == QEvent.Resize:
+            self._ajustar_celdas()
+        return super().viewportEvent(ev)
 
     def mimeData(self, items):
         md = QMimeData()

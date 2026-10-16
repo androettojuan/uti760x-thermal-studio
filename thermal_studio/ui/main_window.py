@@ -428,13 +428,22 @@ class MainWindow(QMainWindow):
         m.addAction("Configurar conexión…", self.configurar_camara)
 
         m = mb.addMenu("&Ver")
-        for texto, w, atajo in (("Biblioteca", self.panel_bib, "Ctrl+1"),
-                                ("Datos", self.panel, "Ctrl+2")):
+        for texto, w, atajo, btn, clave in (
+                ("Biblioteca", self.panel_bib, "Ctrl+1", self.btn_panel_bib, "ver/biblioteca"),
+                ("Datos", self.panel, "Ctrl+2", self.btn_panel_datos, "ver/datos")):
             a = m.addAction(texto)
             a.setCheckable(True)
-            a.setChecked(True)
             a.setShortcut(atajo)
-            a.toggled.connect(w.setVisible)
+            visible = self.settings.value(clave, True, type=bool)
+
+            def alternar(on, w=w, btn=btn, clave=clave):
+                w.setVisible(on)
+                btn.setChecked(on)
+                self.settings.setValue(clave, on)
+            a.toggled.connect(alternar)
+            btn.toggled.connect(lambda on, a=a: a.setChecked(on))
+            a.setChecked(visible)
+            alternar(visible)
         m.addSeparator()
         self.act_visible = m.addAction("Foto visible en grande", self.ver_visible)
         self.act_visible.setShortcut("V")
@@ -551,6 +560,10 @@ class MainWindow(QMainWindow):
         for a in (self.act_ant, self.act_sig):
             a.setShortcutContext(Qt.WidgetWithChildrenShortcut)
             self.viewer.addAction(a)
+        self.btn_panel_bib = boton_icono("mdi6.dock-left", "Mostrar u ocultar la biblioteca (Ctrl+1)",
+                                         checkable=True)
+        h.addWidget(self.btn_panel_bib)
+        h.addWidget(separador())
         self.btn_ant = boton_icono("mdi6.chevron-left", "Foto anterior (←)")
         self.btn_sig = boton_icono("mdi6.chevron-right", "Foto siguiente (→)")
         self.btn_ant.clicked.connect(lambda: self._navegar(-1))
@@ -568,10 +581,10 @@ class MainWindow(QMainWindow):
         h.addWidget(separador())
 
         # Paleta
-        h.addWidget(etiqueta("Paleta", "suave"))
         self.combo_paleta = QComboBox()
         self.combo_paleta.setIconSize(QSize(56, 14))
-        self.combo_paleta.setMinimumWidth(170)
+        self.combo_paleta.setMinimumWidth(150)
+        self.combo_paleta.setToolTip("Paleta de colores")
         for pid in palettes.disponibles():
             self.combo_paleta.addItem(swatch_paleta(pid), palettes.NOMBRES[pid], pid)
         guardada = self.settings.value("paleta", palettes.POR_DEFECTO)
@@ -585,12 +598,11 @@ class MainWindow(QMainWindow):
         h.addWidget(separador())
 
         # Contraste
-        h.addWidget(etiqueta("Contraste", "suave"))
         self.combo_contraste = QComboBox()
         self.combo_contraste.addItem("Como la cámara", CONTRASTE_CAMARA)
         self.combo_contraste.addItem("Lineal", CONTRASTE_LINEAL)
         self.combo_contraste.setToolTip(
-            "Como la cámara: reparte los colores según cuánto ocupa cada temperatura en la "
+            "Contraste.\n\nComo la cámara: reparte los colores según cuánto ocupa cada temperatura en la "
             "imagen, para ver detalles aunque haya cielo u objetos muy fríos o calientes.\n"
             "Lineal: escala pareja entre mínima y máxima, para comparar fotos entre sí.\n"
             "Las temperaturas medidas son las mismas en los dos modos.")
@@ -601,9 +613,10 @@ class MainWindow(QMainWindow):
         h.addWidget(separador())
 
         # Rango
-        h.addWidget(etiqueta("Rango", "suave"))
         self.spin_lo = self._spin()
         self.spin_hi = self._spin()
+        self.spin_lo.setToolTip("Rango de la escala de colores: mínima")
+        self.spin_hi.setToolTip("Rango de la escala de colores: máxima")
         h.addWidget(self.spin_lo)
         h.addWidget(etiqueta("–", "suave"))
         h.addWidget(self.spin_hi)
@@ -655,6 +668,10 @@ class MainWindow(QMainWindow):
         self.btn_tema.clicked.connect(lambda: self.set_tema(
             theme.CLARO if theme.gestor.nombre == theme.OSCURO else theme.OSCURO))
         h.addWidget(self.btn_tema)
+        h.addWidget(separador())
+        self.btn_panel_datos = boton_icono("mdi6.dock-right", "Mostrar u ocultar los datos (Ctrl+2)",
+                                           checkable=True)
+        h.addWidget(self.btn_panel_datos)
 
         for v in self._visores():
             v.set_contraste(self.combo_contraste.currentData())
