@@ -2,6 +2,19 @@
 import sys
 
 
+def _traducir_qt(app, idioma):
+    """Textos que pone Qt mismo: botones Yes/No/Cancel de los dialogos, el
+    menu de clic derecho de los campos de texto, etc."""
+    from PySide6.QtCore import QLibraryInfo, QTranslator
+
+    nombre = {"es": "qtbase_es", "pt": "qtbase_pt_BR"}.get(idioma)
+    if not nombre:
+        return
+    t = QTranslator(app)
+    if t.load(nombre, QLibraryInfo.path(QLibraryInfo.TranslationsPath)):
+        app.installTranslator(t)
+
+
 def main():
     from pathlib import Path
 
@@ -31,6 +44,7 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName(APP_NOMBRE)
     app.setApplicationVersion(__version__)
+    _traducir_qt(app, i18n.idioma())
     app.setWindowIcon(QIcon(str(Path(__file__).parent / "ui" / "assets" / "icono.png")))
     app.setStyle("Fusion")
     # El tema va antes de crear la ventana, para que nazca con los colores correctos

@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
 from ..core import camera_ftp, exportar, palettes
 from ..core.importer import Modo
 from ..core.library import Library
-from ..core.mediciones import AREA, LINEA, PUNTO
+from ..core.mediciones import AREA, LINEA, PUNTO, Mediciones
 from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import ayuda, sistema, theme
@@ -402,6 +402,7 @@ class MainWindow(QMainWindow):
         self.panel_bib.abrirFoto.connect(self.abrir)
         self.panel_bib.compararFotos.connect(self.comparar)
         self.panel_bib.evolucionPedida.connect(self.ver_evolucion)
+        self.panel_bib.fotosEliminadas.connect(self._fotos_eliminadas)
         self.panel_bib.mensaje.connect(lambda m: self.statusBar().showMessage(m, 10000))
 
         self.split = QSplitter(Qt.Horizontal)
@@ -833,6 +834,29 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage(str(path))
         self.panel_bib.marcar_abierta(path)
         return True
+
+    def _fotos_eliminadas(self, rutas):
+        """Si se elimino la foto abierta, pasar a la siguiente de la carpeta
+        (o a la anterior); si no queda ninguna, volver a la pantalla vacia."""
+        fuera = {Path(r) for r in rutas}
+        if self.img is None or self.img.path not in fuera:
+            return
+        self._timer_notas.stop()  # sus notas ya no tienen foto donde guardarse
+        i = max(self.indice, 0)
+        quedan = [p for p in self.archivos if p not in fuera]
+        siguientes = [p for p in self.archivos[i + 1:] if p not in fuera]
+        anteriores = [p for p in reversed(self.archivos[:i]) if p not in fuera]
+        for p in siguientes + anteriores:
+            if self.abrir(p):
+                return
+        self.img = None
+        self.archivos, self.indice = quedan, -1
+        self.capa.set_mediciones(Mediciones())
+        self.area_visor.setCurrentIndex(0)
+        for s in (self.spin_lo, self.spin_hi):
+            s.setEnabled(False)
+        self._actualizar_navegacion()
+        self.setWindowTitle(APP_NOMBRE)
 
     def _navegar(self, paso):
         i = self.indice + paso

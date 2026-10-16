@@ -9,6 +9,9 @@ RAIZ = os.path.abspath(os.path.join(SPECPATH, ".."))  # SPECPATH lo define PyIns
 sys.path.insert(0, RAIZ)  # para que collect_data_files encuentre el paquete
 
 datos = collect_data_files("thermal_studio") + collect_data_files("qtawesome")
+# Textos propios de Qt (botones Sí/No, Cancelar, menús de los campos de texto)
+datos += collect_data_files("PySide6", includes=["Qt/translations/qtbase_es.qm",
+                                                 "Qt/translations/qtbase_pt_BR.qm"])
 
 a = Analysis(
     [os.path.join(SPECPATH, "lanzador.py")],

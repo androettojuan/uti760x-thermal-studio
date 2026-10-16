@@ -15,9 +15,9 @@ jobs:
   windows:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: "3.13"
           cache: pip
@@ -52,14 +52,14 @@ jobs:
           & $iscc "/DVersion=${{ steps.version.outputs.version }}" packaging\instalador.iss
           if ($LASTEXITCODE -ne 0) { throw "Inno Setup falló" }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ThermalStudio-${{ steps.version.outputs.version }}-instalador
           path: dist/ThermalStudio-*-instalador.exe
 
       - name: Publicar Release
         if: github.ref_type == 'tag'
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           name: Thermal Studio ${{ steps.version.outputs.version }}
           files: dist/ThermalStudio-*-instalador.exe

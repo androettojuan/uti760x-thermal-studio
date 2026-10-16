@@ -208,6 +208,21 @@ class Library:
             self._limpiar_fecha_vacia(src.parent)
         return nuevas
 
+    def eliminar_fotos(self, paths, papelera):
+        """Manda fotos a la papelera. Devuelve las que se pudieron eliminar.
+
+        `papelera(path) -> bool` la pone la interfaz (la del sistema). Las
+        mediciones quedan guardadas: si la foto se recupera de la papelera,
+        vuelven con ella. Tampoco se borra del registro de importadas, asi
+        «Traer faltantes» no la vuelve a bajar.
+        """
+        eliminadas = []
+        for p in map(Path, paths):
+            if papelera(p):
+                eliminadas.append(p)
+                self._limpiar_fecha_vacia(p.parent)
+        return eliminadas
+
     def _limpiar_fecha_vacia(self, carpeta):
         """Borra una carpeta de fecha de Importadas que quedo vacia."""
         importadas = (self.raiz / CARPETA_IMPORTADAS).resolve()

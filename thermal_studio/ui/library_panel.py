@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from PySide6.QtCore import QEvent, QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
+from PySide6.QtCore import QEvent, QFile, QMimeData, QSettings, QSize, Qt, QTimer, QUrl, Signal
 from PySide6.QtGui import QAction, QColor, QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QFrame, QHBoxLayout, QInputDialog, QListWidget, QListWidgetItem, QMenu,
@@ -102,6 +102,7 @@ class ArbolCarpetas(QTreeWidget):
 
 # -- galeria ---------------------------------------------------------------
 class Galeria(QListWidget):
+    eliminarPedido = Signal()  # tecla Supr con fotos elegidas
     MIN_COLUMNAS = 2
     MARGEN_CELDA = 18   # padding del item + separacion entre celdas
     ALTO_TEXTO = 38     # renglon con la fecha debajo de la miniatura
@@ -151,6 +152,21 @@ class Galeria(QListWidget):
             self._ajustar_celdas()
         return super().viewportEvent(ev)
 
+    def event(self, ev):
+        # Supr en la galeria es para las fotos, no para la medicion elegida
+        # (atajo de la ventana): reclamar la tecla antes que el atajo
+        if (ev.type() == QEvent.ShortcutOverride and ev.key() == Qt.Key_Delete
+                and self.selectedItems()):
+            ev.accept()
+            return True
+        return super().event(ev)
+
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key_Delete and self.selectedItems():
+            self.eliminarPedido.emit()
+            return
+        super().keyPressEvent(ev)
+
     def mimeData(self, items):
         md = QMimeData()
         md.setUrls([QUrl.fromLocalFile(it.data(ROL_RUTA)) for it in items])
@@ -171,6 +187,7 @@ class LibraryPanel(QFrame):
     abrirFoto = Signal(Path)
     compararFotos = Signal(list)  # dos rutas
     evolucionPedida = Signal(str)  # carpeta relativa
+    fotosEliminadas = Signal(list)  # rutas
     mensaje = Signal(str)
 
     def __init__(self, biblioteca, conexion_camara, parent=None):
@@ -755,6 +772,8 @@ class LibraryPanel(QFrame):
         self.galeria = Galeria()
         self.galeria.currentItemChanged.connect(self._foto_elegida)
         self.galeria.customContextMenuRequested.connect(self._menu_galeria)
+        self.galeria.eliminarPedido.connect(
+            lambda: self.eliminar_fotos(self.galeria.rutas_seleccionadas()))
         v.addWidget(self.galeria)
         v.addWidget(etiqueta(tr("Arrastrá las fotos a una carpeta para organizarlas."), "suave"))
         return w
@@ -819,7 +838,39 @@ class LibraryPanel(QFrame):
         m.addAction(tr("Mover a carpeta…"), lambda: self.mover_a_carpeta(rutas))
         m.addSeparator()
         m.addAction(tr("Mostrar en el Explorador"), lambda: sistema.mostrar_en_explorador(rutas[0]))
+        m.addSeparator()
+        m.addAction(theme.icono("mdi6.trash-can-outline", "texto_suave"), tr("Eliminar…"),
+                    lambda: self.eliminar_fotos(rutas))
         m.exec(self.galeria.viewport().mapToGlobal(pos))
+
+    def eliminar_fotos(self, rutas):
+        """Manda las fotos a la papelera, despues de preguntar."""
+        if not rutas:
+            return
+        if len(rutas) == 1:
+            pregunta = tr("¿Eliminar la foto «%s»?") % rutas[0].name
+        else:
+            pregunta = tr("¿Eliminar %d fotos?") % len(rutas)
+        r = QMessageBox.question(
+            self, tr("Eliminar fotos"),
+            pregunta + "\n\n" + tr("Van a la papelera de reciclaje: desde ahí se pueden recuperar."))
+        if r != QMessageBox.Yes:
+            return
+
+        def papelera(p):
+            ok = QFile.moveToTrash(str(p))
+            return ok[0] if isinstance(ok, tuple) else bool(ok)
+
+        eliminadas = self._intentar(self.bib.eliminar_fotos, rutas, papelera) or []
+        if len(eliminadas) < len(rutas):
+            QMessageBox.warning(self, tr("Eliminar fotos"), plural(
+                len(rutas) - len(eliminadas), "No se pudo eliminar %d foto.",
+                "No se pudieron eliminar %d fotos.") % (len(rutas) - len(eliminadas)))
+        if eliminadas:
+            self.refrescar()
+            self.fotosEliminadas.emit(eliminadas)
+            self.mensaje.emit(plural(len(eliminadas), "%d foto enviada a la papelera.",
+                                     "%d fotos enviadas a la papelera.") % len(eliminadas))
 
     def mover_a_carpeta(self, rutas):
         carpetas = self.bib.todas_las_carpetas()

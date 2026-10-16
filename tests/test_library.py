@@ -101,6 +101,27 @@ def test_mover_fotos_no_pisa(lib):
     assert (lib.abs("Y") / "f.jpg").read_bytes() == b"2"
 
 
+def test_eliminar_fotos(lib):
+    fecha = lib.abs("Importadas") / "2026-10-16"
+    fecha.mkdir(parents=True)
+    a, b = fecha / "IMG20261016105000.jpg", fecha / "IMG20261016105100.jpg"
+    a.write_bytes(b"1")
+    b.write_bytes(b"2")
+    papelera = []
+
+    def a_la_papelera(p):
+        if p == b:
+            return False  # por ejemplo, abierta en otro programa
+        papelera.append(p)
+        p.unlink()
+        return True
+
+    assert lib.eliminar_fotos([a, b], a_la_papelera) == [a]
+    assert papelera == [a] and b.exists()
+    assert lib.eliminar_fotos([b], lambda p: p.unlink() or True) == [b]
+    assert not fecha.exists()  # la carpeta de fecha vacia se va
+
+
 def test_importar_todo_y_faltantes(lib):
     cam = CamaraFalsa([A, B])
     plan = importer.planificar(cam.listar_fotos(), lib, Modo.FALTANTES)
