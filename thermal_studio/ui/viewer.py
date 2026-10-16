@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter
 
 from ..core import palettes
+from ..core.thermal_image import posiciones_ecualizadas
 from . import theme
 
 pg.setConfigOptions(imageAxisOrder="row-major", antialias=True)
@@ -47,6 +48,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.paleta = palettes.POR_DEFECTO
         self.invertir = False
         self.contraste = CONTRASTE_CAMARA
+        self.temps_reparto = None  # si no es None, ecualiza con esto y no con la imagen
 
         self.vb = self.addViewBox(row=0, col=0)
         self.vb.setAspectLocked(True)
@@ -108,6 +110,12 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.setRenderHint(QPainter.SmoothPixmapTransform, activo)
         self.viewport().update()
 
+    def set_reparto(self, temps):
+        """Temperaturas con las que repartir los colores en modo camara, o None
+        para usar las de la imagen. Al comparar se le pasan las de todas."""
+        self.temps_reparto = temps
+        self._aplicar_colormap()
+
     def set_rango(self, lo, hi):
         if hi <= lo:
             hi = lo + 0.1
@@ -130,7 +138,8 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         if self.contraste == CONTRASTE_CAMARA and self.img is not None:
             lo, hi = self.rango()
             n = len(palettes.get(self.paleta, self.invertir))
-            posiciones = self.img.posiciones_ecualizadas(lo, hi, n)
+            temps = self.img.temps if self.temps_reparto is None else self.temps_reparto
+            posiciones = posiciones_ecualizadas(temps, lo, hi, n)
         self.cbar.setColorMap(_colormap(self.paleta, self.invertir, posiciones))
 
     def _aplicar_tema(self):

@@ -158,6 +158,7 @@ def _icono_vacio():
 # -- panel -----------------------------------------------------------------
 class LibraryPanel(QFrame):
     abrirFoto = Signal(Path)
+    compararFotos = Signal(list)  # dos rutas
     mensaje = Signal(str)
 
     def __init__(self, biblioteca, conexion_camara, parent=None):
@@ -775,6 +776,8 @@ class LibraryPanel(QFrame):
         m = QMenu(self)
         if len(rutas) == 1:
             m.addAction("Abrir", lambda: self.abrirFoto.emit(rutas[0]))
+        elif len(rutas) == 2:
+            m.addAction("Comparar (C)", lambda: self.compararFotos.emit(rutas))
         m.addAction("Mover a carpeta…", lambda: self.mover_a_carpeta(rutas))
         m.addSeparator()
         m.addAction("Mostrar en el Explorador", lambda: sistema.mostrar_en_explorador(rutas[0]))

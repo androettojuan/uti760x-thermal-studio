@@ -15,10 +15,12 @@ from ..core.library import Library
 from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
+from .compare import VistaComparacion
 from .library_panel import LibraryPanel
 from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
 from .widgets import (
-    boton, boton_icono, etiqueta, marco, pixmap_redondeado, separador, swatch_paleta,
+    TarjetaDato, boton, boton_icono, etiqueta, marco, pixmap_redondeado, separador,
+    swatch_paleta,
 )
 
 APP_NOMBRE = "Thermal Studio"
@@ -30,33 +32,6 @@ def _fmt(v, sufijo=""):
 
 
 # -- panel derecho -----------------------------------------------------------
-class TarjetaDato(QWidget):
-    """Tarjeta chica: punto de color + etiqueta arriba, valor grande abajo."""
-
-    def __init__(self, titulo, token_color=None):
-        super().__init__()
-        caja = marco("tarjeta", self)
-        lay = QVBoxLayout(self)
-        lay.setContentsMargins(0, 0, 0, 0)
-        lay.addWidget(caja)
-        v = QVBoxLayout(caja)
-        v.setContentsMargins(12, 10, 12, 10)
-        v.setSpacing(2)
-        self.titulo = etiqueta(titulo, "etiqueta")
-        self.valor = etiqueta("—", "valor")
-        self.valor.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        v.addWidget(self.titulo)
-        v.addWidget(self.valor)
-        if token_color:
-            def pintar():
-                c = theme.color(token_color)
-                self.titulo.setText("<span style='color:%s'>●</span>&nbsp; %s" % (c, titulo))
-            theme.al_cambiar(pintar)
-
-    def set(self, texto):
-        self.valor.setText(texto)
-
-
 class MiniaturaVisible(QLabel):
     """Foto visible en el panel: se ajusta al ancho y se amplia con un clic."""
 
@@ -264,7 +239,7 @@ class PanelInfo(QScrollArea):
 
 # -- visor con estado vacio --------------------------------------------------
 class AreaVisor(QStackedWidget):
-    def __init__(self, viewer):
+    def __init__(self, viewer, comparacion):
         super().__init__()
         vacio = marco("panel")
         v = QVBoxLayout(vacio)
@@ -284,9 +259,16 @@ class AreaVisor(QStackedWidget):
             "QFrame { background: %s; }" % theme.color("fondo")))
         self.addWidget(vacio)
         self.addWidget(viewer)
+        self.addWidget(comparacion)
 
     def mostrar_visor(self):
         self.setCurrentIndex(1)
+
+    def mostrar_comparacion(self):
+        self.setCurrentIndex(2)
+
+    def comparando(self):
+        return self.currentIndex() == 2
 
 
 # -- dialogo de conexion -----------------------------------------------------
@@ -359,7 +341,10 @@ class MainWindow(QMainWindow):
         self.viewer = ThermalViewer()
         self.viewer.cursorMovido.connect(self._cursor_movido)
         self.viewer.rangoCambiado.connect(self._rango_desde_barra)
-        self.area_visor = AreaVisor(self.viewer)
+        self.comparacion = VistaComparacion()
+        self.comparacion.rangoCambiado.connect(self._rango_desde_barra)
+        self.comparacion.cerrar.connect(self.cerrar_comparacion)
+        self.area_visor = AreaVisor(self.viewer, self.comparacion)
 
         self.panel = PanelInfo()
         self.panel.setMinimumWidth(290)
@@ -371,6 +356,7 @@ class MainWindow(QMainWindow):
         self.panel_bib = LibraryPanel(self.biblioteca, self.conexion_camara)
         self.panel_bib.setMinimumWidth(340)
         self.panel_bib.abrirFoto.connect(self.abrir)
+        self.panel_bib.compararFotos.connect(self.comparar)
         self.panel_bib.mensaje.connect(lambda m: self.statusBar().showMessage(m, 10000))
 
         self.split = QSplitter(Qt.Horizontal)
@@ -435,7 +421,14 @@ class MainWindow(QMainWindow):
                      "el sensor es de 640×512")
         a.setChecked(self.settings.value("suavizar", True, type=bool))
         a.toggled.connect(self._suavizado_cambiado)
-        self.viewer.set_suavizado(a.isChecked())
+        for v in self._visores():
+            v.set_suavizado(a.isChecked())
+        m.addSeparator()
+        self.act_comparar = m.addAction("Comparar las dos fotos seleccionadas",
+                                        self.comparar_seleccionadas)
+        self.act_comparar.setShortcut("C")
+        a = m.addAction("Cerrar comparación", self.cerrar_comparacion)
+        a.setShortcut(Qt.Key_Escape)
         m.addSeparator()
         sub = m.addMenu("Tema")
         grupo = QActionGroup(self)
@@ -449,7 +442,8 @@ class MainWindow(QMainWindow):
 
     def _suavizado_cambiado(self, activo):
         self.settings.setValue("suavizar", activo)
-        self.viewer.set_suavizado(activo)
+        for v in self._visores():
+            v.set_suavizado(activo)
 
     def ver_visible(self):
         if self.panel.foto_visible is None:
@@ -594,7 +588,8 @@ class MainWindow(QMainWindow):
                                       "Mostrar máxima, mínima y centro sobre la imagen",
                                       checkable=True)
         self.btn_marcas.setChecked(True)
-        self.btn_marcas.toggled.connect(self.viewer.set_marcas_visibles)
+        self.btn_marcas.toggled.connect(
+            lambda on: [v.set_marcas_visibles(on) for v in self._visores()])
         h.addWidget(self.btn_marcas)
         h.addStretch(1)
 
@@ -607,7 +602,8 @@ class MainWindow(QMainWindow):
             theme.CLARO if theme.gestor.nombre == theme.OSCURO else theme.OSCURO))
         h.addWidget(self.btn_tema)
 
-        self.viewer.set_contraste(self.combo_contraste.currentData())
+        for v in self._visores():
+            v.set_contraste(self.combo_contraste.currentData())
         self._paleta_cambiada()
         self._actualizar_navegacion()
         return barra
@@ -671,34 +667,84 @@ class MainWindow(QMainWindow):
             i += paso
 
     def _actualizar_navegacion(self):
-        self.btn_ant.setEnabled(self.indice > 0)
-        self.btn_sig.setEnabled(0 <= self.indice < len(self.archivos) - 1)
+        simple = not self.area_visor.comparando()
+        self.btn_ant.setEnabled(simple and self.indice > 0)
+        self.btn_sig.setEnabled(simple and 0 <= self.indice < len(self.archivos) - 1)
+
+    # -- comparacion -------------------------------------------------------
+    def comparar_seleccionadas(self):
+        rutas = self.panel_bib.galeria.rutas_seleccionadas()
+        if len(rutas) != 2:
+            QMessageBox.information(
+                self, APP_NOMBRE, "Para comparar, seleccioná dos fotos en la galería "
+                "(Ctrl + clic en la segunda) y apretá C.")
+            return
+        self.comparar(rutas)
+
+    def comparar(self, rutas):
+        try:
+            a, b = (ThermalImage.abrir(r) for r in rutas)
+        except (FormatoInvalido, OSError) as e:
+            QMessageBox.warning(self, APP_NOMBRE, "No se pudo abrir una de las fotos:\n\n%s" % e)
+            return
+        fijo = self.btn_fijar.isChecked() and (self.img or self.area_visor.comparando())
+        self.comparacion.mostrar(a, b, self._vista_activa().rango() if fijo else None)
+        self.area_visor.mostrar_comparacion()
+        self.comparacion.setFocus()
+        self._sincronizar_spins()
+        for s in (self.spin_lo, self.spin_hi):
+            s.setEnabled(True)
+        self._actualizar_navegacion()
+        self.setWindowTitle("Comparación — %s" % APP_NOMBRE)
+
+    def cerrar_comparacion(self):
+        if not self.area_visor.comparando():
+            return
+        if self.img:
+            self.area_visor.mostrar_visor()
+            self._sincronizar_spins()
+            self.setWindowTitle("%s — %s" % (self.img.path.name, APP_NOMBRE))
+        else:
+            self.area_visor.setCurrentIndex(0)
+        self._actualizar_navegacion()
 
     # -- paleta y rango ----------------------------------------------------
     def _paleta_cambiada(self, *_):
         pid = self.combo_paleta.currentData()
         self.settings.setValue("paleta", pid)
-        self.viewer.set_paleta(pid, self.btn_invertir.isChecked())
+        for v in self._visores():
+            v.set_paleta(pid, self.btn_invertir.isChecked())
 
     def _contraste_cambiado(self, *_):
         modo = self.combo_contraste.currentData()
         self.settings.setValue("contraste", modo)
-        self.viewer.set_contraste(modo)
+        for v in self._visores():
+            v.set_contraste(modo)
+
+    def _visores(self):
+        """Todos los visores, para que paleta, contraste, etc. valgan en los dos modos."""
+        return [self.viewer] + self.comparacion.viewers
+
+    def _vista_activa(self):
+        """El visor simple o la comparacion: los dos tienen set_rango/rango."""
+        return self.comparacion if self.area_visor.comparando() else self.viewer
 
     def rango_auto(self):
-        if self.img:
+        if self.area_visor.comparando():
+            self.comparacion.set_rango(*self.comparacion.rango_auto())
+        elif self.img:
             self.viewer.set_rango(*self.img.rango_auto())
-            self._sincronizar_spins()
+        self._sincronizar_spins()
 
     def _rango_desde_spins(self, *_):
-        if self.img:
-            self.viewer.set_rango(self.spin_lo.value(), self.spin_hi.value())
+        if self.img or self.area_visor.comparando():
+            self._vista_activa().set_rango(self.spin_lo.value(), self.spin_hi.value())
 
     def _rango_desde_barra(self, lo, hi):
         self._sincronizar_spins()
 
     def _sincronizar_spins(self):
-        lo, hi = self.viewer.rango()
+        lo, hi = self._vista_activa().rango()
         for s, v in ((self.spin_lo, lo), (self.spin_hi, hi)):
             s.blockSignals(True)
             s.setValue(v)

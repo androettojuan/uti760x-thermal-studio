@@ -117,3 +117,12 @@ def test_ecualizado_da_mas_colores_a_lo_que_ocupa_mas_imagen():
     # Lineal, 30-32 C tendria 1/16 de los colores; ecualizado, la mayoria
     en_tramo = np.mean(pos >= 30 / 32)
     assert en_tramo > 0.6
+
+
+def test_rango_auto_conjunto_abarca_las_dos_fotos():
+    from thermal_studio.core.thermal_image import rango_auto_conjunto
+    fria = ThermalImage(np.linspace(0, 20, 10000).reshape(100, 100), None)
+    caliente = ThermalImage(np.linspace(10, 60, 10000).reshape(100, 100), None)
+    lo, hi = rango_auto_conjunto([fria, caliente])
+    assert hi == 60.0
+    assert lo == pytest.approx(fria.rango_auto()[0])

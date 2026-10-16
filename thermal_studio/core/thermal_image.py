@@ -147,26 +147,9 @@ class ThermalImage:
     MEZCLA_LINEAL = 0.2
 
     def posiciones_ecualizadas(self, lo, hi, n=256):
-        """Donde poner (0..1 dentro de lo..hi) cada uno de n colores de la paleta.
-
-        Como hace la camara: los colores se reparten segun cuantos pixeles hay
-        en cada temperatura, asi lo que ocupa mas imagen recibe mas colores.
-        La temperatura de cada pixel no cambia; solo el color que le toca.
-        Siempre estrictamente creciente.
-        """
-        lineal = np.linspace(0.0, 1.0, n)
-        dentro = np.sort(self.temps[(self.temps >= lo) & (self.temps <= hi)], axis=None)
-        if hi <= lo or dentro.size < 2:
-            return lineal
-        # Acumulada del histograma mezclada con la de una escala pareja: la
-        # parte lineal la hace estrictamente creciente, asi se puede invertir
-        grilla = np.linspace(0.0, 1.0, 4 * n)
-        acum = np.searchsorted(dentro, lo + grilla * (hi - lo), side="right") / dentro.size
-        acum = (1 - self.MEZCLA_LINEAL) * acum + self.MEZCLA_LINEAL * grilla
-        acum = (acum - acum[0]) / (acum[-1] - acum[0])
-        pos = np.interp(lineal, acum, grilla)
-        pos[0], pos[-1] = 0.0, 1.0
-        return pos
+        """Reparto de colores segun el histograma de esta imagen; ver
+        `posiciones_ecualizadas` del modulo."""
+        return posiciones_ecualizadas(self.temps, lo, hi, n, self.MEZCLA_LINEAL)
 
     # -- render ------------------------------------------------------------
     def render(self, paleta=palettes.POR_DEFECTO, rango=None, invertir=False):
@@ -179,3 +162,35 @@ class ThermalImage:
         span = max(hi - lo, 1e-6)
         idx = np.clip((self.temps - lo) / span * (len(lut) - 1), 0, len(lut) - 1)
         return lut[idx.astype(np.intp)]
+
+
+def posiciones_ecualizadas(temps, lo, hi, n=256, mezcla_lineal=ThermalImage.MEZCLA_LINEAL):
+    """Donde poner (0..1 dentro de lo..hi) cada uno de n colores de la paleta.
+
+    Como hace la camara: los colores se reparten segun cuantos pixeles hay
+    en cada temperatura, asi lo que ocupa mas imagen recibe mas colores.
+    La temperatura de cada pixel no cambia; solo el color que le toca.
+    `temps` puede juntar varias imagenes: al comparar, el reparto tiene que
+    ser el mismo en todas para que un color sea la misma temperatura.
+    Siempre estrictamente creciente.
+    """
+    lineal = np.linspace(0.0, 1.0, n)
+    temps = np.asarray(temps)
+    dentro = np.sort(temps[(temps >= lo) & (temps <= hi)], axis=None)
+    if hi <= lo or dentro.size < 2:
+        return lineal
+    # Acumulada del histograma mezclada con la de una escala pareja: la
+    # parte lineal la hace estrictamente creciente, asi se puede invertir
+    grilla = np.linspace(0.0, 1.0, 4 * n)
+    acum = np.searchsorted(dentro, lo + grilla * (hi - lo), side="right") / dentro.size
+    acum = (1 - mezcla_lineal) * acum + mezcla_lineal * grilla
+    acum = (acum - acum[0]) / (acum[-1] - acum[0])
+    pos = np.interp(lineal, acum, grilla)
+    pos[0], pos[-1] = 0.0, 1.0
+    return pos
+
+
+def rango_auto_conjunto(imagenes):
+    """Rango automatico que abarca a todas: para verlas con la misma escala."""
+    rangos = [img.rango_auto() for img in imagenes]
+    return min(lo for lo, _ in rangos), max(hi for _, hi in rangos)

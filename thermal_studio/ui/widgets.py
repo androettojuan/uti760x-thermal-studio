@@ -2,7 +2,9 @@
 import numpy as np
 from PySide6.QtCore import QSize, Qt
 from PySide6.QtGui import QIcon, QImage, QPainter, QPainterPath, QPixmap
-from PySide6.QtWidgets import QFrame, QLabel, QPushButton, QSizePolicy, QToolButton
+from PySide6.QtWidgets import (
+    QFrame, QLabel, QPushButton, QSizePolicy, QToolButton, QVBoxLayout, QWidget,
+)
 
 from ..core import palettes
 from . import theme
@@ -101,3 +103,30 @@ def set_propiedad(w, nombre, valor):
     """Cambia una propiedad de estilo y fuerza a Qt a re-aplicar el QSS."""
     w.setProperty(nombre, valor)
     _repulir(w)
+
+
+class TarjetaDato(QWidget):
+    """Tarjeta chica: punto de color + etiqueta arriba, valor grande abajo."""
+
+    def __init__(self, titulo, token_color=None):
+        super().__init__()
+        caja = marco("tarjeta", self)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(0, 0, 0, 0)
+        lay.addWidget(caja)
+        v = QVBoxLayout(caja)
+        v.setContentsMargins(12, 10, 12, 10)
+        v.setSpacing(2)
+        self.titulo = etiqueta(titulo, "etiqueta")
+        self.valor = etiqueta("—", "valor")
+        self.valor.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        v.addWidget(self.titulo)
+        v.addWidget(self.valor)
+        if token_color:
+            def pintar():
+                c = theme.color(token_color)
+                self.titulo.setText("<span style='color:%s'>●</span>&nbsp; %s" % (c, titulo))
+            theme.al_cambiar(pintar)
+
+    def set(self, texto):
+        self.valor.setText(texto)
