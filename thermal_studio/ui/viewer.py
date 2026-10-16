@@ -2,6 +2,7 @@
 import numpy as np
 import pyqtgraph as pg
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPainter
 
 from ..core import palettes
 from . import theme
@@ -77,6 +78,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.lectura.hide()
         self.vb.addItem(self.lectura)
 
+        self.set_suavizado(True)
         theme.al_cambiar(self._aplicar_tema)
         self.scene().sigMouseMoved.connect(self._mouse_movido)
         self.setCursor(Qt.CrossCursor)
@@ -96,6 +98,15 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
     def set_contraste(self, modo):
         self.contraste = modo
         self._aplicar_colormap()
+
+    def set_suavizado(self, activo):
+        """Interpola los colores al ampliar, como la pantalla de la camara.
+
+        Es solo como se dibuja: no agrega detalle, y la lectura bajo el
+        cursor sigue siendo la del pixel real del sensor (640x512).
+        """
+        self.setRenderHint(QPainter.SmoothPixmapTransform, activo)
+        self.viewport().update()
 
     def set_rango(self, lo, hi):
         if hi <= lo:

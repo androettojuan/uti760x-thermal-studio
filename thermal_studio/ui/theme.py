@@ -155,9 +155,22 @@ QFrame[rol="barra"] { background: %(panel)s; border-bottom: 1px solid %(borde)s;
 QFrame[rol="tarjeta"] { background: %(superficie)s; border: 1px solid %(borde)s;
                         border-radius: 10px; }
 QFrame[rol="separador"] { background: %(borde)s; border: none; margin: 4px 6px; }
-QSplitter::handle { background: %(borde)s; }
-QSplitter::handle:horizontal { width: 1px; }
-QSplitter::handle:vertical { height: 1px; }
+/* Zona de agarre de 7 px con una linea de 1 px al medio: con el handle de
+   1 px no habia forma de agarrarlo con el mouse */
+QSplitter::handle:horizontal { width: 7px; background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
+    stop:0 transparent, stop:0.43 transparent, stop:0.431 %(borde)s, stop:0.569 %(borde)s,
+    stop:0.57 transparent, stop:1 transparent); }
+QSplitter::handle:vertical { height: 7px; background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+    stop:0 transparent, stop:0.43 transparent, stop:0.431 %(borde)s, stop:0.569 %(borde)s,
+    stop:0.57 transparent, stop:1 transparent); }
+QSplitter::handle:horizontal:hover, QSplitter::handle:horizontal:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 transparent,
+    stop:0.28 transparent, stop:0.285 %(acento)s, stop:0.715 %(acento)s,
+    stop:0.72 transparent, stop:1 transparent); }
+QSplitter::handle:vertical:hover, QSplitter::handle:vertical:pressed {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 transparent,
+    stop:0.28 transparent, stop:0.285 %(acento)s, stop:0.715 %(acento)s,
+    stop:0.72 transparent, stop:1 transparent); }
 
 /* --- textos --- */
 QLabel[rol="titulo"] { font-size: 15px; font-weight: 600; }

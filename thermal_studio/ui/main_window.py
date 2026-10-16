@@ -1,7 +1,7 @@
 """Ventana principal: biblioteca | visor | datos, con barra de herramientas arriba."""
 from pathlib import Path
 
-from PySide6.QtCore import QSettings, QSize, Qt
+from PySide6.QtCore import QSettings, QSize, Qt, Signal
 from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
@@ -55,6 +55,84 @@ class TarjetaDato(QWidget):
 
     def set(self, texto):
         self.valor.setText(texto)
+
+
+class MiniaturaVisible(QLabel):
+    """Foto visible en el panel: se ajusta al ancho y se amplia con un clic."""
+
+    clic = Signal()
+
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip("Foto visible tomada por la cámara. Clic para verla en grande (V)")
+        self.setMinimumWidth(1)  # que no impida achicar el panel
+        self._original = None
+
+    def set_foto(self, pix):
+        self._original = pix
+        self._escalar()
+
+    def _escalar(self):
+        if self._original is None or self._original.isNull():
+            self.clear()
+            return
+        ancho = max(self.width(), 120)
+        self.setPixmap(pixmap_redondeado(
+            self._original.scaledToWidth(ancho, Qt.SmoothTransformation), 10))
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        if self._original is not None and (self.pixmap().isNull()
+                                           or self.pixmap().width() != max(self.width(), 120)):
+            self._escalar()
+
+    def mouseReleaseEvent(self, ev):
+        if ev.button() == Qt.LeftButton and self._original is not None:
+            self.clic.emit()
+        super().mouseReleaseEvent(ev)
+
+
+class _FotoAjustada(QLabel):
+    """Muestra una foto entera, ajustada al tamano disponible."""
+
+    def __init__(self):
+        super().__init__()
+        self.setAlignment(Qt.AlignCenter)
+        self.setMinimumSize(200, 150)
+        self._original = None
+
+    def set_foto(self, pix):
+        self._original = pix
+        self._escalar()
+
+    def _escalar(self):
+        if self._original is not None and not self._original.isNull():
+            self.setPixmap(self._original.scaled(self.size(), Qt.KeepAspectRatio,
+                                                 Qt.SmoothTransformation))
+
+    def resizeEvent(self, ev):
+        super().resizeEvent(ev)
+        self._escalar()
+
+
+class VentanaVisible(QDialog):
+    """Foto visible en grande. No es modal: sigue a la foto abierta mientras
+    se navega, asi se puede tener al lado de la termica."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowFlag(Qt.WindowMaximizeButtonHint, True)
+        self.foto = _FotoAjustada()
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.addWidget(self.foto)
+        self.resize(1000, 780)
+
+    def mostrar(self, pix, titulo):
+        self.setWindowTitle("Foto visible — %s" % titulo)
+        self.foto.set_foto(pix)
 
 
 class PanelInfo(QScrollArea):
@@ -127,13 +205,13 @@ class PanelInfo(QScrollArea):
         lay.addWidget(self.aviso)
 
         self.titulo_visible = etiqueta("FOTO VISIBLE", "seccion")
-        self.visible = QLabel()
-        self.visible.setAlignment(Qt.AlignCenter)
+        self.visible = MiniaturaVisible()
         lay.addWidget(self.titulo_visible)
         lay.addWidget(self.visible)
         self.titulo_visible.hide()
         lay.addStretch(1)
         self._img = None
+        self.foto_visible = None
         theme.al_cambiar(lambda: self._img and self._pintar_aviso(self._img))
 
     def mostrar(self, img):
@@ -156,13 +234,12 @@ class PanelInfo(QScrollArea):
 
         pix = QPixmap()
         if img.visible_jpeg and pix.loadFromData(img.visible_jpeg):
-            ancho = max(self.viewport().width() - 34, 200)
-            pix = pix.scaledToWidth(ancho, Qt.SmoothTransformation)
-            self.visible.setPixmap(pixmap_redondeado(pix, 10))
-            self.visible.setToolTip("Foto visible tomada por la cámara")
+            self.foto_visible = pix
+            self.visible.set_foto(pix)
             self.titulo_visible.show()
         else:
-            self.visible.clear()
+            self.foto_visible = None
+            self.visible.set_foto(None)
             self.titulo_visible.hide()
 
     def _pintar_aviso(self, img):
@@ -286,6 +363,8 @@ class MainWindow(QMainWindow):
 
         self.panel = PanelInfo()
         self.panel.setMinimumWidth(290)
+        self.panel.visible.clic.connect(self.ver_visible)
+        self._ventana_visible = None
 
         raiz = self.settings.value("biblioteca") or str(sistema.biblioteca_por_defecto())
         self.biblioteca = Library(raiz)
@@ -294,23 +373,27 @@ class MainWindow(QMainWindow):
         self.panel_bib.abrirFoto.connect(self.abrir)
         self.panel_bib.mensaje.connect(lambda m: self.statusBar().showMessage(m, 10000))
 
-        centro = QWidget()
-        cv = QVBoxLayout(centro)
-        cv.setContentsMargins(0, 0, 0, 0)
-        cv.setSpacing(0)
-        cv.addWidget(self._crear_barra())
-        cv.addWidget(self.area_visor, 1)
-
         self.split = QSplitter(Qt.Horizontal)
+        self.split.setHandleWidth(7)
         self.split.setChildrenCollapsible(False)
         self.split.addWidget(self.panel_bib)
-        self.split.addWidget(centro)
+        self.split.addWidget(self.area_visor)
         self.split.addWidget(self.panel)
         self.split.setStretchFactor(1, 1)
         estado = self.settings.value("divisores")
         if estado is None or not self.split.restoreState(estado):
             self.split.setSizes([380, 760, 300])
-        self.setCentralWidget(self.split)
+
+        # La barra va a todo el ancho y no dentro de la columna del visor: ahi
+        # su ancho minimo (~1090 px) dejaba a los tres paneles en su minimo y
+        # los divisores no se podian mover
+        raiz_ui = QWidget()
+        rv = QVBoxLayout(raiz_ui)
+        rv.setContentsMargins(0, 0, 0, 0)
+        rv.setSpacing(0)
+        rv.addWidget(self._crear_barra())
+        rv.addWidget(self.split, 1)
+        self.setCentralWidget(raiz_ui)
 
         self._crear_menu()
         self.statusBar().showMessage("Listo")
@@ -344,6 +427,16 @@ class MainWindow(QMainWindow):
             a.setShortcut(atajo)
             a.toggled.connect(w.setVisible)
         m.addSeparator()
+        self.act_visible = m.addAction("Foto visible en grande", self.ver_visible)
+        self.act_visible.setShortcut("V")
+        a = m.addAction("Suavizar la imagen térmica")
+        a.setCheckable(True)
+        a.setToolTip("Interpola al ampliar, como la pantalla de la cámara. No agrega detalle: "
+                     "el sensor es de 640×512")
+        a.setChecked(self.settings.value("suavizar", True, type=bool))
+        a.toggled.connect(self._suavizado_cambiado)
+        self.viewer.set_suavizado(a.isChecked())
+        m.addSeparator()
         sub = m.addMenu("Tema")
         grupo = QActionGroup(self)
         for nombre, texto in ((theme.OSCURO, "Oscuro"), (theme.CLARO, "Claro")):
@@ -353,6 +446,28 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _=False, n=nombre: self.set_tema(n))
             grupo.addAction(a)
         self._acciones_tema = {a.text(): a for a in grupo.actions()}
+
+    def _suavizado_cambiado(self, activo):
+        self.settings.setValue("suavizar", activo)
+        self.viewer.set_suavizado(activo)
+
+    def ver_visible(self):
+        if self.panel.foto_visible is None:
+            self.statusBar().showMessage("Esta foto no tiene imagen visible.", 5000)
+            return
+        if self._ventana_visible is None:
+            self._ventana_visible = VentanaVisible(self)
+        self._actualizar_visible()
+        self._ventana_visible.show()
+        self._ventana_visible.raise_()
+        self._ventana_visible.activateWindow()
+
+    def _actualizar_visible(self):
+        v = self._ventana_visible
+        if self.panel.foto_visible is None:
+            v.hide()
+        else:
+            v.mostrar(self.panel.foto_visible, self.img.path.name if self.img.path else "")
 
     def set_tema(self, nombre):
         theme.aplicar(QApplication.instance(), nombre)
@@ -532,6 +647,8 @@ class MainWindow(QMainWindow):
         self.area_visor.mostrar_visor()
         self.viewer.mostrar(img, rango)
         self.panel.mostrar(img)
+        if self._ventana_visible is not None and self._ventana_visible.isVisible():
+            self._actualizar_visible()
         self._sincronizar_spins()
         for s in (self.spin_lo, self.spin_hi):
             s.setEnabled(True)
