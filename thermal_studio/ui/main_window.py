@@ -34,6 +34,17 @@ APP_NOMBRE = "Thermal Studio"
 EXTENSIONES = {".jpg", ".jpeg"}
 
 
+def _delta_visible(maxima, minima, limites):
+    """Maxima - minima; si alguna esta fuera de lo que mide la camara, la
+    diferencia real es al menos la de los limites: '>51,4 °C'."""
+    if limites is None:
+        return temp(maxima - minima, diferencia=True)
+    lo, hi = limites
+    recortada = minima < lo or maxima > hi
+    d = min(maxima, hi) - max(minima, lo)
+    return (">" if recortada else "") + temp(d, diferencia=True)
+
+
 def _fmt(v, sufijo=""):
     return "—" if v is None else "%s%s" % (v, sufijo)
 
@@ -214,11 +225,12 @@ class PanelInfo(QScrollArea):
         self.archivo.setText(img.path.name if img.path else "—")
         self.fecha.setText(fecha_hora(m.fecha, segundos=True) if m.fecha else tr("Sin fecha"))
         mx, mn = img.maximo(), img.minimo()
-        self.tmax.set(fmt_temp(mx.temp))
-        self.tmin.set(fmt_temp(mn.temp))
-        self.tcentro.set(fmt_temp(img.centro().temp))
-        self.tmedia.set(fmt_temp(img.media()))
-        self.delta.set(temp(mx.temp - mn.temp, diferencia=True))
+        lim = img.limites
+        self.tmax.set(fmt_temp(mx.temp, lim))
+        self.tmin.set(fmt_temp(mn.temp, lim))
+        self.tcentro.set(fmt_temp(img.centro().temp, lim))
+        self.tmedia.set(fmt_temp(img.media(), lim))
+        self.delta.set(_delta_visible(mx.temp, mn.temp, lim))
         self.ems.setText(num(m.emisividad, 2))
         self.trefl.setText(temp(m.temp_reflejada, dec=0))
         self.tamb.setText(temp(m.temp_ambiente, dec=0))
@@ -253,7 +265,7 @@ class PanelInfo(QScrollArea):
         self.aviso.setText(aviso)
 
     def set_cursor(self, fila, col, temp):
-        self.cursor.setText(fmt_temp(temp))
+        self.cursor.setText(fmt_temp(temp, self._img.limites if self._img else None))
         self.coords.setText(tr("Pasá el mouse por la imagen") if temp is None
                             else "x %d · y %d" % (col, fila))
 
@@ -802,7 +814,7 @@ class MainWindow(QMainWindow):
         self.panel.mostrar(img)
         mediciones = self.biblioteca.leer_mediciones(path.name)
         self.capa.set_mediciones(mediciones)
-        self.panel.mediciones.set_datos(mediciones, img.temps)
+        self.panel.mediciones.set_datos(mediciones, img.temps, img.limites)
         self.panel.notas.blockSignals(True)
         self.panel.notas.setPlainText(mediciones.notas)
         self.panel.notas.blockSignals(False)

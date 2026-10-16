@@ -107,7 +107,7 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
     mx = img.maximo()
     _triangulo(p, (mx.col + 0.5) * escala, (mx.fila + 0.5) * escala, 9 * escala, COLOR_MAX)
     _etiqueta(p, (mx.col + 0.5) * escala + 6 * escala, (mx.fila + 0.5) * escala,
-              temp(mx.temp), COLOR_MAX, limite)
+              temp(mx.temp, limites=img.limites), COLOR_MAX, limite)
 
     for m in mediciones.lista:
         e = estadistica(m, img.temps)
@@ -119,7 +119,8 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
             p.drawLine(QPointF(x - r, y), QPointF(x + r, y))
             p.drawLine(QPointF(x, y - r), QPointF(x, y + r))
             p.drawEllipse(QPointF(x, y), r * 0.55, r * 0.55)
-            _etiqueta(p, x + r, y - r * 0.3, "%s  %s" % (m.nombre, temp(e.maxima)), limite=limite)
+            _etiqueta(p, x + r, y - r * 0.3, "%s  %s" % (m.nombre, temp(e.maxima, limites=img.limites)),
+                      limite=limite)
             continue
         if m.tipo == LINEA:
             p.drawLine(QPointF(g[0], g[1]), QPointF(g[2], g[3]))
@@ -131,7 +132,8 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
             ex, ey = x0, y0 - 2 * escala
         _triangulo(p, (e.col_max + 0.5) * escala, (e.fila_max + 0.5) * escala, 7 * escala,
                    COLOR_TRAZO)
-        _etiqueta(p, ex, ey, tr("%s  máx %s") % (m.nombre, temp(e.maxima)), limite=limite)
+        _etiqueta(p, ex, ey, tr("%s  máx %s") % (m.nombre, temp(e.maxima, limites=img.limites)),
+                  limite=limite)
 
     if con_barra:
         _barra(p, QRectF(base.width() + 12 * escala, 10 * escala, 18 * escala,
@@ -230,8 +232,8 @@ class _Pagina:
         return alto
 
 
-def _fmt(v):
-    return temp(v)
+def _fmt(v, limites=None):
+    return temp(v, limites=limites)
 
 
 def _fmt_delta(v):
@@ -344,7 +346,7 @@ def _caratula(pg, fotos, datos, lugar):
         pg.fuente(9.5)
         pg.texto(cols[0][0], y, 32, fecha_hora(f) if f else "—")
         pg.texto(cols[1][0], y, 66, lugar(img.path) if img.path else "—")
-        pg.texto(cols[2][0], y, 25, _fmt(img.maximo().temp))
+        pg.texto(cols[2][0], y, 25, _fmt(img.maximo().temp, img.limites))
         if mayor is not None and mayor >= 1.0:
             pg.fuente(9.5, True, AVISO)
         pg.texto(cols[3][0], y, 27, _fmt_delta(mayor) or "—")
@@ -401,8 +403,9 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     pg.texto(95, y, 80, tr("PARÁMETROS DE CAPTURA"))
     y0 = y + 6
     m = img.meta
-    filas_izq = ((tr("Máxima"), _fmt(mx.temp)), (tr("Mínima"), _fmt(mn.temp)),
-                 (tr("Centro"), _fmt(img.centro().temp)))
+    lim = img.limites
+    filas_izq = ((tr("Máxima"), _fmt(mx.temp, lim)), (tr("Mínima"), _fmt(mn.temp, lim)),
+                 (tr("Centro"), _fmt(img.centro().temp, lim)))
     filas_der = ((tr("Emisividad"), num(m.emisividad, 2) if m.emisividad is not None else "—"),
                  (tr("T. reflejada"), _fmt(m.temp_reflejada)), (tr("Distancia"),
                   num(m.distancia_m) + " m" if m.distancia_m is not None else "—"),
@@ -439,9 +442,9 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
             pg.texto(0, y, 54, ("★ " if r.es_referencia else "") + r.nombre)
             pg.fuente(9.5)
             pg.texto(55, y, 22, NOMBRES_TIPO[r.tipo])
-            pg.texto(78, y, 24, _fmt(r.maxima))
-            pg.texto(102, y, 24, _fmt(r.minima))
-            pg.texto(126, y, 24, _fmt(r.media))
+            pg.texto(78, y, 24, _fmt(r.maxima, lim))
+            pg.texto(102, y, 24, _fmt(r.minima, lim))
+            pg.texto(126, y, 24, _fmt(r.media, lim))
             if r.es_referencia:
                 pg.fuente(9.5, color=GRIS)
                 pg.texto(150, y, 30, tr("referencia"))

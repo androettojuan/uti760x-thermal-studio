@@ -19,6 +19,7 @@ class FilaEvolucion:
     mediciones: dict = field(default_factory=dict)  # nombre -> (maxima, delta_t o None)
     referencia: str | None = None
     notas: str = ""
+    limites: tuple | None = None   # lo que mide la camara en el modo de la foto
 
     @property
     def mayor_delta(self):
@@ -31,7 +32,8 @@ def fila(ruta, img, mediciones):
     return FilaEvolucion(
         ruta=ruta, fecha=img.meta.fecha, maxima=img.maximo().temp,
         mediciones={r.nombre: (r.maxima, r.delta_t) for r in filas},
-        referencia=mediciones.referencia, notas=mediciones.notas.strip())
+        referencia=mediciones.referencia, notas=mediciones.notas.strip(),
+        limites=getattr(img, "limites", None))
 
 
 def ordenar(filas):

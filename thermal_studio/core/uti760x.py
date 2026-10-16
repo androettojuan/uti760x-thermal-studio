@@ -56,6 +56,9 @@ class TempConverter:
             -81.81853020377739, 0.049336755508830724)
     RANGO_VALIDADO = (2444, 9519)
     RANGO_VALIDADO_C = (-19, 120)
+    # Lo que mide la camara en el rango normal: fuera de esto la pantalla
+    # muestra "<-20,0" o ">125,0"
+    RANGO_CAMARA_NORMAL = (-20.0, 125.0)
     FPA_VALIDADO = (16.0, 40.3)
     FPA_POR_DEFECTO = 25.0
     ERROR_TIPICO_C = 0.47

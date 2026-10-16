@@ -107,16 +107,36 @@ def de_unidad(v, diferencia=False):
     return v / 1.8 if diferencia else (v - 32) / 1.8
 
 
-def temp(v, dec=1, signo=False, diferencia=None):
-    """'31,5 °C' en la unidad y con el decimal del idioma; '—' si es None.
+def valor(v, dec=1, signo=False, diferencia=None, limites=None):
+    """Numero de una temperatura, sin la unidad: '31,5' (o '88,5' en °F).
 
-    Con signo, se toma como diferencia (cambio, Delta T) salvo que se diga
-    otra cosa; una diferencia sin signo se pide con diferencia=True.
+    `limites` (min, max en Celsius) es lo que la camara mide en el modo de la
+    foto: fuera de eso se muestra como la camara, '<-20,0' o '>125,0', y no un
+    numero estimado con una precision que no tiene. Las diferencias no se
+    recortan.
     """
     if v is None:
         return "—"
     dif = signo if diferencia is None else diferencia
-    return num(a_unidad(v, dif), dec, signo) + " " + simbolo()
+    if limites is not None and not dif:
+        lo, hi = limites
+        if v < lo:
+            return "<" + num(a_unidad(lo), dec)
+        if v > hi:
+            return ">" + num(a_unidad(hi), dec)
+    return num(a_unidad(v, dif), dec, signo)
+
+
+def temp(v, dec=1, signo=False, diferencia=None, limites=None):
+    """'31,5 °C' en la unidad y con el decimal del idioma; '—' si es None.
+
+    Con signo, se toma como diferencia (cambio, Delta T) salvo que se diga
+    otra cosa; una diferencia sin signo se pide con diferencia=True. Ver
+    `valor` para `limites`.
+    """
+    if v is None:
+        return "—"
+    return valor(v, dec, signo, diferencia, limites) + " " + simbolo()
 
 
 def fecha(dt):

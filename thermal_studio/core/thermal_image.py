@@ -59,6 +59,9 @@ class ThermalImage:
         self.path = Path(path) if path else None
         self.fuera_de_rango = fuera_de_rango
         self.rango_alto = rango_alto
+        # Lo que mide la camara en el modo de la foto; None si no se sabe
+        # (rango alto, todavia sin calibrar)
+        self.limites = None if rango_alto else TempConverter.RANGO_CAMARA_NORMAL
         self.incertidumbre_c = incertidumbre_c
         self.visible_jpeg = visible_jpeg
 

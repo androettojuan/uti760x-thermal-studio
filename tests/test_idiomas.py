@@ -94,3 +94,25 @@ def test_csv_en_fahrenheit(tmp_path):
     texto = (tmp_path / "m.csv").read_text(encoding="utf-8-sig")
     assert "Máxima (°F)" in texto
     assert "P1;Punto;86,0;86,0;86,0;18,0;" in texto              # 30 °C; ΔT 10 °C = 18 °F
+
+
+def test_fuera_de_lo_que_mide_la_camara_se_muestra_como_la_camara():
+    lim = (-20.0, 125.0)
+    assert i18n.temp(-31.6, limites=lim) == "<-20,0 °C"
+    assert i18n.temp(140.2, limites=lim) == ">125,0 °C"
+    assert i18n.temp(31.4, limites=lim) == "31,4 °C"
+    assert i18n.temp(-31.6) == "-31,6 °C"                         # sin limites: el numero
+    assert i18n.temp(-40.0, signo=True, limites=lim) == "-40,0 °C"   # diferencia: no se recorta
+    try:
+        i18n.set_unidad(i18n.FAHRENHEIT)
+        assert i18n.temp(-31.6, limites=lim) == "<-4,0 °F"
+        assert i18n.temp(140.2, limites=lim) == ">257,0 °F"
+    finally:
+        i18n.set_unidad(i18n.CELSIUS)
+
+
+def test_rango_alto_no_tiene_el_limite_de_125():
+    import numpy as np
+    from thermal_studio.core.thermal_image import ThermalImage
+    assert ThermalImage(np.zeros((4, 4)), None).limites == (-20.0, 125.0)
+    assert ThermalImage(np.zeros((4, 4)), None, rango_alto=True).limites is None

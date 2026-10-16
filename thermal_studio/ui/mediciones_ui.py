@@ -17,15 +17,15 @@ from ..core.mediciones import AREA, LINEA, PUNTO, Mediciones, estadistica, perfi
 from . import theme
 from .viewer import MarcasSinClic
 from .widgets import boton, etiqueta
-from ..i18n import a_unidad, num, simbolo, temp, tr
+from ..i18n import a_unidad, num, simbolo, temp, tr, valor
 
 COLOR_MEDICION = "#ffffff"
 COLOR_SOMBRA = (0, 0, 0, 170)
 TAM_MINIMO = 2.0  # en pixeles de imagen: menos que esto es un clic, no un arrastre
 
 
-def _fmt(t):
-    return num(a_unidad(t))
+def _fmt(t, limites=None):
+    return valor(t, limites=limites)
 
 
 def _fmt_delta(d):
@@ -126,10 +126,10 @@ class CapaMediciones(QObject):
                 continue
             e = estadistica(m, img.temps)
             if m.tipo == PUNTO:
-                texto.setText("%s  %s" % (m.nombre, temp(e.maxima)))
+                texto.setText("%s  %s" % (m.nombre, temp(e.maxima, limites=img.limites)))
                 texto.setPos(m.geom[0] + 6, m.geom[1] - 6)
             else:
-                texto.setText(tr("%s  máx %s") % (m.nombre, temp(e.maxima)))
+                texto.setText(tr("%s  máx %s") % (m.nombre, temp(e.maxima, limites=img.limites)))
                 puntos.append({"pos": (e.col_max + 0.5, e.fila_max + 0.5)})
                 if m.tipo == LINEA:
                     texto.setPos(m.geom[2] + 6, m.geom[3] - 6)
@@ -304,6 +304,7 @@ class PanelMediciones(QWidget):
         super().__init__()
         self.mediciones = Mediciones()
         self.temps = None
+        self.limites = None
         self._llenando = False
 
         v = QVBoxLayout(self)
@@ -359,8 +360,8 @@ class PanelMediciones(QWidget):
         self._actualizar_perfil()
 
     # -- API ---------------------------------------------------------------
-    def set_datos(self, mediciones, temps):
-        self.mediciones, self.temps = mediciones, temps
+    def set_datos(self, mediciones, temps, limites=None):
+        self.mediciones, self.temps, self.limites = mediciones, temps, limites
         self.refrescar()
 
     def refrescar(self):
@@ -377,7 +378,8 @@ class PanelMediciones(QWidget):
             nombre.setToolTip(tr("Doble clic para cambiar el nombre"))
             if es_ref:
                 nombre.setText("★ " + m.nombre)
-            valores = (_fmt(e and e.maxima), _fmt(e and e.minima), _fmt(e and e.media),
+            lim = self.limites
+            valores = (_fmt(e and e.maxima, lim), _fmt(e and e.minima, lim), _fmt(e and e.media, lim),
                        tr("ref.") if es_ref else _fmt_delta(d))
             self.tabla.setItem(fila, 0, nombre)
             for col, texto in enumerate(valores, start=1):

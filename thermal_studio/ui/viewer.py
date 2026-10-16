@@ -59,8 +59,8 @@ class VistaImagen(pg.ViewBox):
         super().mouseDragEvent(ev, axis)
 
 
-def fmt_temp(t):
-    return temp(t)
+def fmt_temp(t, limites=None):
+    return temp(t, limites=limites)
 
 
 class ThermalViewer(pg.GraphicsLayoutWidget):
@@ -196,7 +196,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
               "brush": pg.mkBrush(c), "pen": pg.mkPen("k", width=1)}
              for p, s, c in zip(puntos, simbolos, colores)])
         for t, p in zip(self.etiquetas, puntos):
-            t.setText(fmt_temp(p.temp))
+            t.setText(fmt_temp(p.temp, img.limites))
             self._ubicar(t, p.col + 0.5, p.fila + 0.5)
 
     def _mouse_movido(self, pos_escena):
@@ -210,7 +210,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         if temp is None:
             self.lectura.hide()
         else:
-            self.lectura.setText(fmt_temp(temp))
+            self.lectura.setText(fmt_temp(temp, self.img.limites))
             self._ubicar(self.lectura, p.x(), p.y())
             self.lectura.show()
         self.cursorMovido.emit(fila, col, temp)

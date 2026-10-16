@@ -93,7 +93,7 @@ class _Columna(QWidget):
             previos = {"max": referencia.maximo().temp, "media": referencia.media(),
                        "min": referencia.minimo().temp}
         for clave, tarjeta in (("max", self.tmax), ("media", self.tmedia), ("min", self.tmin)):
-            texto = fmt_temp(valores[clave])
+            texto = fmt_temp(valores[clave], img.limites)
             if previos is not None:
                 d = valores[clave] - previos[clave]
                 # Que la maxima suba es lo que puede indicar un problema
@@ -194,16 +194,17 @@ class VistaComparacion(QWidget):
             ra, rb = antes.get(n), ahora.get(n)
             cambio = rb.maxima - ra.maxima if ra and rb else None
 
-            def t(v, signo=False):
+            def t(v, signo=False, lim=None):
                 if v is None:
                     return "—"
-                return temp(v, signo=signo)
+                return temp(v, signo=signo, limites=lim)
 
             def delta(r):
                 if r is None:
                     return "—"
                 return tr("referencia") if r.es_referencia else t(r.delta_t, True)
-            valores = (n, t(ra and ra.maxima), t(rb and rb.maxima), t(cambio, True),
+            valores = (n, t(ra and ra.maxima, lim=a.limites), t(rb and rb.maxima, lim=b.limites),
+                       t(cambio, True),
                        delta(ra), delta(rb))
             for c, texto in enumerate(valores):
                 it = QTableWidgetItem(texto)

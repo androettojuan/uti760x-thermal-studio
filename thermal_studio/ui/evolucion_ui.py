@@ -260,7 +260,7 @@ class VistaEvolucion(QWidget):
         for r, f in enumerate(self.filas):
             d = f.mayor_delta
             valores = (fecha_hora(f.fecha) if f.fecha else tr("Sin fecha"),
-                       temp(f.maxima), temp(d, signo=True),
+                       temp(f.maxima, limites=f.limites), temp(d, signo=True),
                        str(len(f.mediciones)) if f.mediciones else "—",
                        f.notas.replace("\n", " "))
             for c, texto in enumerate(valores):
