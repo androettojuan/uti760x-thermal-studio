@@ -3,13 +3,21 @@
 Las dos se ven con la misma paleta, el mismo rango y, en modo camara, el
 mismo reparto de colores: un color es la misma temperatura en las dos.
 """
+from pathlib import Path
+
 import numpy as np
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtWidgets import QGridLayout, QHBoxLayout, QVBoxLayout, QWidget
+from PySide6.QtGui import QColor, QIcon, QPixmap
+from PySide6.QtWidgets import (
+    QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout,
+    QListWidgetItem, QVBoxLayout, QWidget,
+)
 
-from ..core.library import fecha_visible
-from ..core.thermal_image import rango_auto_conjunto
+from ..core.library import CARPETA_IMPORTADAS, ErrorBiblioteca, fecha_visible
+from ..core.thermal_image import _fecha_desde_nombre, rango_auto_conjunto
 from . import theme
+from .library_panel import Galeria
+from .thumbnails import TAMANO, CargadorMiniaturas
 from .viewer import ThermalViewer, fmt_temp
 from .widgets import TarjetaDato, boton, etiqueta, marco
 
@@ -174,3 +182,101 @@ class VistaComparacion(QWidget):
             self.cerrar.emit()
             return
         super().keyPressEvent(ev)
+
+
+class DialogoElegirSegunda(QDialog):
+    """Elegir con que foto comparar la abierta.
+
+    Arranca en la carpeta de la foto abierta (una carpeta = un lugar), con
+    miniaturas; se puede cambiar a cualquier otra carpeta de la biblioteca.
+    """
+
+    def __init__(self, biblioteca, actual, nombre_visible, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Comparar con…")
+        self.resize(760, 560)
+        self.bib = biblioteca
+        self.actual = Path(actual)
+        self.elegida = None
+        self.miniaturas = CargadorMiniaturas(biblioteca.miniaturas, self)
+        self.miniaturas.lista.connect(self._miniatura_lista)
+        self._items = {}
+
+        v = QVBoxLayout(self)
+        v.setSpacing(10)
+        f = _fecha_desde_nombre(self.actual.name)
+        v.addWidget(etiqueta("Elegí la foto para comparar con la del %s"
+                             % (f.strftime("%d/%m/%Y %H:%M") if f else self.actual.name), "titulo"))
+
+        fila = QHBoxLayout()
+        fila.addWidget(etiqueta("Carpeta", "suave"))
+        self.combo = QComboBox()
+        carpetas = biblioteca.todas_las_carpetas()
+        for rel in carpetas:
+            self.combo.addItem(nombre_visible(rel), rel)
+        try:
+            inicial = biblioteca.rel(self.actual.parent)
+        except ValueError:  # foto abierta desde fuera de la biblioteca
+            inicial = CARPETA_IMPORTADAS
+        self.combo.setCurrentIndex(max(self.combo.findData(inicial), 0))
+        self.combo.currentIndexChanged.connect(self._cargar)
+        fila.addWidget(self.combo, 1)
+        v.addLayout(fila)
+
+        self.galeria = Galeria()
+        self.galeria.setSelectionMode(QAbstractItemView.SingleSelection)
+        self.galeria.setDragEnabled(False)
+        self.galeria.itemDoubleClicked.connect(lambda *_: self._aceptar())
+        self.galeria.itemSelectionChanged.connect(self._actualizar_boton)
+        v.addWidget(self.galeria, 1)
+        self.vacia = etiqueta("No hay otras fotos en esta carpeta.", "suave")
+        v.addWidget(self.vacia)
+
+        botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        self.btn_ok = botones.button(QDialogButtonBox.Ok)
+        self.btn_ok.setText("Comparar")
+        botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        botones.accepted.connect(self._aceptar)
+        botones.rejected.connect(self.reject)
+        v.addWidget(botones)
+        self._cargar()
+
+    def _cargar(self):
+        self.miniaturas.cancelar_pendientes()
+        self.galeria.clear()
+        self._items = {}
+        try:
+            fotos = [p for p in self.bib.fotos(self.combo.currentData() or "")
+                     if p.resolve() != self.actual.resolve()]
+        except (ErrorBiblioteca, OSError):
+            fotos = []
+        vacio = QPixmap(TAMANO, int(TAMANO * 0.8))
+        vacio.fill(QColor(theme.color("superficie")))
+        for p in fotos:
+            f = _fecha_desde_nombre(p.name)
+            it = QListWidgetItem(QIcon(vacio), f.strftime("%d/%m/%Y %H:%M") if f else p.stem)
+            it.setData(Qt.UserRole, str(p))
+            it.setToolTip(p.name)
+            self.galeria.addItem(it)
+            self._items[str(p)] = it
+            self.miniaturas.pedir(p)
+        self.vacia.setVisible(not fotos)
+        self._actualizar_boton()
+
+    def _miniatura_lista(self, ruta, img):
+        it = self._items.get(ruta)
+        if it is not None:
+            it.setIcon(QIcon(QPixmap.fromImage(img)))
+
+    def _actualizar_boton(self):
+        self.btn_ok.setEnabled(bool(self.galeria.selectedItems()))
+
+    def _aceptar(self):
+        items = self.galeria.selectedItems()
+        if items:
+            self.elegida = Path(items[0].data(Qt.UserRole))
+            self.accept()
+
+    def done(self, r):
+        self.miniaturas.cancelar_pendientes()
+        super().done(r)

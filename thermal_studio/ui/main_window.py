@@ -16,7 +16,7 @@ from ..core.mediciones import AREA, LINEA, PUNTO
 from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
-from .compare import VistaComparacion
+from .compare import DialogoElegirSegunda, VistaComparacion
 from .mediciones_ui import CapaMediciones, PanelMediciones
 from .library_panel import LibraryPanel
 from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
@@ -433,8 +433,7 @@ class MainWindow(QMainWindow):
         for v in self._visores():
             v.set_suavizado(a.isChecked())
         m.addSeparator()
-        self.act_comparar = m.addAction("Comparar las dos fotos seleccionadas",
-                                        self.comparar_seleccionadas)
+        self.act_comparar = m.addAction("Comparar con otra foto…", self.comparar_seleccionadas)
         self.act_comparar.setShortcut("C")
         a = m.addAction("Soltar herramienta / cerrar comparación", self._escape)
         a.setShortcut(Qt.Key_Escape)
@@ -541,13 +540,17 @@ class MainWindow(QMainWindow):
         self.btn_sig.clicked.connect(lambda: self._navegar(1))
         h.addWidget(self.btn_ant)
         h.addWidget(self.btn_sig)
+        self.btn_comparar = boton("Comparar", "mdi6.compare",
+                                  tooltip="Comparar la foto abierta con otra del mismo lugar (C)")
+        self.btn_comparar.clicked.connect(self.comparar_con_otra)
+        h.addWidget(self.btn_comparar)
         h.addWidget(separador())
 
         # Paleta
         h.addWidget(etiqueta("Paleta", "suave"))
         self.combo_paleta = QComboBox()
         self.combo_paleta.setIconSize(QSize(56, 14))
-        self.combo_paleta.setMinimumWidth(230)
+        self.combo_paleta.setMinimumWidth(170)
         for pid in palettes.disponibles():
             self.combo_paleta.addItem(swatch_paleta(pid), palettes.NOMBRES[pid], pid)
         guardada = self.settings.value("paleta", palettes.POR_DEFECTO)
@@ -605,7 +608,6 @@ class MainWindow(QMainWindow):
         h.addWidget(separador())
 
         # Herramientas de medicion
-        h.addWidget(etiqueta("Medir", "suave"))
         self.grupo_herr = QButtonGroup(self)
         self.grupo_herr.setExclusive(True)
         self.botones_herr = {}
@@ -646,7 +648,7 @@ class MainWindow(QMainWindow):
         s.setSingleStep(0.5)
         s.setSuffix(" °C")
         s.setAlignment(Qt.AlignRight)
-        s.setMinimumWidth(92)
+        s.setMinimumWidth(84)
         s.setKeyboardTracking(False)
         s.setEnabled(False)
         s.valueChanged.connect(self._rango_desde_spins)
@@ -763,13 +765,23 @@ class MainWindow(QMainWindow):
 
     # -- comparacion -------------------------------------------------------
     def comparar_seleccionadas(self):
+        """C: si hay dos fotos elegidas en la galeria las compara; si no,
+        pide con cual comparar la abierta."""
         rutas = self.panel_bib.galeria.rutas_seleccionadas()
-        if len(rutas) != 2:
-            QMessageBox.information(
-                self, APP_NOMBRE, "Para comparar, seleccioná dos fotos en la galería "
-                "(Ctrl + clic en la segunda) y apretá C.")
+        if len(rutas) == 2:
+            self.comparar(rutas)
+        else:
+            self.comparar_con_otra()
+
+    def comparar_con_otra(self):
+        if self.img is None or self.img.path is None:
+            QMessageBox.information(self, APP_NOMBRE,
+                                    "Abrí primero una de las fotos que querés comparar.")
             return
-        self.comparar(rutas)
+        d = DialogoElegirSegunda(self.biblioteca, self.img.path, self.panel_bib.nombre_visible,
+                                 self)
+        if d.exec() and d.elegida:
+            self.comparar([self.img.path, d.elegida])
 
     def comparar(self, rutas):
         try:
