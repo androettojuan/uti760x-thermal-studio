@@ -200,6 +200,9 @@ QPushButton[variante="icono"]:hover, QToolButton[variante="icono"]:hover {
 QToolButton[variante="icono"]:checked, QPushButton[variante="icono"]:checked {
     background: %(seleccion)s; border-color: %(acento)s; }
 QPushButton[variante="peligro"]:hover { border-color: %(peligro)s; color: %(peligro)s; }
+/* Botones de texto que funcionan como selector (p. ej. Máximas / ΔT) */
+QPushButton[variante="secundario"]:checked {
+    background: %(seleccion)s; border-color: %(acento)s; color: %(texto)s; }
 
 /* --- campos --- */
 QComboBox, QDoubleSpinBox, QSpinBox, QLineEdit {

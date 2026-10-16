@@ -169,6 +169,7 @@ def _icono_vacio():
 class LibraryPanel(QFrame):
     abrirFoto = Signal(Path)
     compararFotos = Signal(list)  # dos rutas
+    evolucionPedida = Signal(str)  # carpeta relativa
     mensaje = Signal(str)
 
     def __init__(self, biblioteca, conexion_camara, parent=None):
@@ -722,9 +723,18 @@ class LibraryPanel(QFrame):
         v = QVBoxLayout(w)
         v.setContentsMargins(0, 0, 0, 0)
         v.setSpacing(8)
+        cab = QHBoxLayout()
+        cab.setSpacing(8)
         self.lbl_galeria = etiqueta("")
         self.lbl_galeria.setWordWrap(True)
-        v.addWidget(self.lbl_galeria)
+        cab.addWidget(self.lbl_galeria, 1)
+        self.btn_evolucion = boton("Evolución", "mdi6.chart-line",
+                                   tooltip="Ver cómo cambiaron las temperaturas de este lugar "
+                                           "a lo largo del tiempo (E)")
+        self.btn_evolucion.clicked.connect(
+            lambda: self.evolucionPedida.emit(self.carpeta_actual or CARPETA_IMPORTADAS))
+        cab.addWidget(self.btn_evolucion, 0, Qt.AlignTop)
+        v.addLayout(cab)
         self.galeria = Galeria()
         self.galeria.currentItemChanged.connect(self._foto_elegida)
         self.galeria.customContextMenuRequested.connect(self._menu_galeria)
@@ -743,6 +753,7 @@ class LibraryPanel(QFrame):
         except (ErrorBiblioteca, OSError):
             fotos, n_sub = [], 0
         titulo = self.nombre_visible(rel)
+        self.btn_evolucion.setVisible(len(fotos) >= 2)
         if fotos:
             self.lbl_galeria.setText("<b>%s</b> &nbsp;<span style='color:%s'>%d foto%s</span>"
                                      % (titulo, theme.color("texto_suave"), len(fotos),

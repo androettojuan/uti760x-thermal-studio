@@ -17,6 +17,7 @@ from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
 from .compare import DialogoElegirSegunda, VistaComparacion
+from .evolucion_ui import VistaEvolucion
 from .dialogo_informe import ABIERTA, CARPETA, ELEGIDAS, DialogoInforme
 from .informe import Ajustes, generar_pdf, imagen_anotada
 from .mediciones_ui import CapaMediciones, PanelMediciones
@@ -255,7 +256,7 @@ class PanelInfo(QScrollArea):
 
 # -- visor con estado vacio --------------------------------------------------
 class AreaVisor(QStackedWidget):
-    def __init__(self, viewer, comparacion):
+    def __init__(self, viewer, comparacion, evolucion):
         super().__init__()
         vacio = marco("panel")
         v = QVBoxLayout(vacio)
@@ -276,6 +277,7 @@ class AreaVisor(QStackedWidget):
         self.addWidget(vacio)
         self.addWidget(viewer)
         self.addWidget(comparacion)
+        self.addWidget(evolucion)
 
     def mostrar_visor(self):
         self.setCurrentIndex(1)
@@ -285,6 +287,12 @@ class AreaVisor(QStackedWidget):
 
     def comparando(self):
         return self.currentIndex() == 2
+
+    def mostrar_evolucion(self):
+        self.setCurrentIndex(3)
+
+    def viendo_evolucion(self):
+        return self.currentIndex() == 3
 
 
 # -- dialogo de conexion -----------------------------------------------------
@@ -361,7 +369,10 @@ class MainWindow(QMainWindow):
         self.comparacion = VistaComparacion()
         self.comparacion.rangoCambiado.connect(self._rango_desde_barra)
         self.comparacion.cerrar.connect(self.cerrar_comparacion)
-        self.area_visor = AreaVisor(self.viewer, self.comparacion)
+        self.evolucion = VistaEvolucion()
+        self.evolucion.abrirFoto.connect(self.abrir)
+        self.evolucion.cerrar.connect(self.cerrar_comparacion)
+        self.area_visor = AreaVisor(self.viewer, self.comparacion, self.evolucion)
 
         self.panel = PanelInfo()
         self.panel.setMinimumWidth(290)
@@ -374,6 +385,7 @@ class MainWindow(QMainWindow):
         self.panel_bib.setMinimumWidth(340)
         self.panel_bib.abrirFoto.connect(self.abrir)
         self.panel_bib.compararFotos.connect(self.comparar)
+        self.panel_bib.evolucionPedida.connect(self.ver_evolucion)
         self.panel_bib.mensaje.connect(lambda m: self.statusBar().showMessage(m, 10000))
 
         self.split = QSplitter(Qt.Horizontal)
@@ -458,6 +470,9 @@ class MainWindow(QMainWindow):
         m.addSeparator()
         self.act_comparar = m.addAction("Comparar con otra foto…", self.comparar_seleccionadas)
         self.act_comparar.setShortcut("C")
+        a = m.addAction("Evolución de la carpeta", lambda: self.ver_evolucion(
+            self.panel_bib.carpeta_actual))
+        a.setShortcut("E")
         a = m.addAction("Soltar herramienta / cerrar comparación", self._escape)
         a.setShortcut(Qt.Key_Escape)
         a = m.addAction("Borrar la medición elegida", self.borrar_medicion)
@@ -540,6 +555,7 @@ class MainWindow(QMainWindow):
                 ev.ignore()
                 return
         self.panel_bib.detener()
+        self.evolucion.detener()
         if self._timer_notas.isActive():
             self._timer_notas.stop()
             self._guardar_mediciones()
@@ -748,7 +764,7 @@ class MainWindow(QMainWindow):
             i += paso
 
     def _actualizar_navegacion(self):
-        simple = not self.area_visor.comparando()
+        simple = self.area_visor.currentIndex() in (0, 1)
         self.btn_ant.setEnabled(simple and self.indice > 0)
         self.btn_sig.setEnabled(simple and 0 <= self.indice < len(self.archivos) - 1)
 
@@ -966,9 +982,27 @@ class MainWindow(QMainWindow):
         self._actualizar_navegacion()
         self.setWindowTitle("Comparación — %s" % APP_NOMBRE)
 
-    def cerrar_comparacion(self):
-        if not self.area_visor.comparando():
+    def ver_evolucion(self, carpeta_rel):
+        try:
+            rutas = self.biblioteca.fotos(carpeta_rel) if carpeta_rel else []
+        except OSError:
+            rutas = []
+        if not rutas:
+            QMessageBox.information(self, APP_NOMBRE, "Elegí en la biblioteca la carpeta del "
+                                    "lugar (la que tiene sus fotos de distintas fechas).")
             return
+        self.set_herramienta(None)
+        self.evolucion.mostrar(rutas, self.biblioteca, self.panel_bib.nombre_visible(carpeta_rel))
+        self.area_visor.mostrar_evolucion()
+        self.evolucion.setFocus()
+        self._actualizar_navegacion()
+        self.setWindowTitle("Evolución — %s" % APP_NOMBRE)
+
+    def cerrar_comparacion(self):
+        """Vuelve a la foto desde la comparacion o la evolucion."""
+        if not (self.area_visor.comparando() or self.area_visor.viendo_evolucion()):
+            return
+        self.evolucion.detener()
         if self.img:
             self.area_visor.mostrar_visor()
             self._sincronizar_spins()
