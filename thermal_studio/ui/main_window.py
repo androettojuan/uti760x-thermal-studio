@@ -972,7 +972,8 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, APP_NOMBRE, "No se pudo abrir una de las fotos:\n\n%s" % e)
             return
         fijo = self.btn_fijar.isChecked() and (self.img or self.area_visor.comparando())
-        self.comparacion.mostrar(a, b, self._vista_activa().rango() if fijo else None)
+        self.comparacion.mostrar(a, b, self._vista_activa().rango() if fijo else None,
+                                 lambda img: self.biblioteca.leer_mediciones(img.path.name))
         self.set_herramienta(None)
         self.area_visor.mostrar_comparacion()
         self.comparacion.setFocus()

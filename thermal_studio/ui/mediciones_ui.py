@@ -59,10 +59,12 @@ class CapaMediciones(QObject):
     terminaron = Signal()
     seleccionada = Signal(str)
 
-    def __init__(self, viewer):
+    def __init__(self, viewer, editable=True):
+        """Con editable=False solo dibuja (por ejemplo, en la comparacion)."""
         super().__init__()
         self.viewer = viewer
         self.vb = viewer.vb
+        self.editable = editable
         self.mediciones = Mediciones()
         self.herramienta = None   # None (mover) | PUNTO | LINEA | AREA
         self.elegida = ""
@@ -74,8 +76,9 @@ class CapaMediciones(QObject):
                                           pen=pg.mkPen("k", width=1))
         self.maximos.setZValue(15)
         self.vb.addItem(self.maximos)
-        self.vb.manejador_arrastre = self._arrastre
-        self.vb.manejador_clic = self._clic
+        if editable:
+            self.vb.manejador_arrastre = self._arrastre
+            self.vb.manejador_clic = self._clic
 
     # -- API ---------------------------------------------------------------
     def set_mediciones(self, mediciones):
@@ -158,7 +161,8 @@ class CapaMediciones(QObject):
         nombre = m.nombre
         if m.tipo == PUNTO:
             item = _Punto(lambda: self._elegida_en_imagen(item), pos=(m.geom[0], m.geom[1]),
-                          size=16, symbol="crosshair", pen=self._pen(nombre))
+                          size=16, symbol="crosshair", pen=self._pen(nombre),
+                          movable=self.editable)
             item.sigPositionChanged.connect(lambda *_: self._movido(item))
             item.sigPositionChangeFinished.connect(lambda *_: self.terminaron.emit())
         elif m.tipo == LINEA:
@@ -168,7 +172,13 @@ class CapaMediciones(QObject):
             x0, y0, x1, y1 = m.geom
             item = pg.RectROI((min(x0, x1), min(y0, y1)), (abs(x1 - x0), abs(y1 - y0)),
                               pen=self._pen(nombre), sideScalers=True)
-        if m.tipo != PUNTO:
+        if m.tipo != PUNTO and not self.editable:
+            item.translatable = False
+            item.setAcceptedMouseButtons(Qt.NoButton)
+            for h in item.getHandles():
+                h.setAcceptedMouseButtons(Qt.NoButton)
+                h.hide()
+        elif m.tipo != PUNTO:
             item.setAcceptedMouseButtons(Qt.LeftButton)
             item.sigClicked.connect(lambda *_: self._elegida_en_imagen(item))
             item.sigRegionChanged.connect(lambda *_: self._movido(item))

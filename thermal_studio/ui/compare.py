@@ -10,13 +10,15 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QColor, QIcon, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView, QComboBox, QDialog, QDialogButtonBox, QGridLayout, QHBoxLayout,
-    QListWidgetItem, QVBoxLayout, QWidget,
+    QHeaderView, QListWidgetItem, QTableWidget, QTableWidgetItem, QVBoxLayout, QWidget,
 )
 
 from ..core.library import CARPETA_IMPORTADAS, ErrorBiblioteca, fecha_visible
+from ..core.mediciones import Mediciones, resultados
 from ..core.thermal_image import _fecha_desde_nombre, rango_auto_conjunto
 from . import theme
 from .library_panel import Galeria
+from .mediciones_ui import CapaMediciones
 from .thumbnails import TAMANO, CargadorMiniaturas
 from .viewer import ThermalViewer, fmt_temp
 from .widgets import TarjetaDato, boton, etiqueta, marco
@@ -64,6 +66,7 @@ class _Columna(QWidget):
         v.addWidget(self.archivo)
 
         self.viewer = ThermalViewer()
+        self.capa = CapaMediciones(self.viewer, editable=False)
         v.addWidget(self.viewer, 1)
 
         datos = QGridLayout()
@@ -75,13 +78,14 @@ class _Columna(QWidget):
             datos.addWidget(t, 0, i)
         v.addLayout(datos)
 
-    def mostrar(self, img, rango, referencia=None):
+    def mostrar(self, img, rango, referencia=None, mediciones=None):
         """`referencia` es la otra foto: si esta, se muestra cuanto cambio."""
         fecha, hora = _fecha(img)
         self.fecha.setText(fecha)
         self.hora.setText(hora)
         self.archivo.setText(img.path.name if img.path else "")
         self.viewer.mostrar(img, rango)
+        self.capa.set_mediciones(mediciones or Mediciones())
         valores = {"max": img.maximo().temp, "media": img.media(), "min": img.minimo().temp}
         previos = None
         if referencia is not None:
@@ -141,25 +145,80 @@ class VistaComparacion(QWidget):
             c.viewer.rangoCambiado.connect(self._rango_de_una)
         v.addLayout(fila, 1)
 
+        # Mediciones con el mismo nombre en las dos fechas
+        self.titulo_tabla = etiqueta("MEDICIONES EN LAS DOS FECHAS", "seccion")
+        v.addWidget(self.titulo_tabla)
+        self.tabla = QTableWidget(0, len(self.COLUMNAS))
+        self.tabla.setHorizontalHeaderLabels(self.COLUMNAS)
+        self.tabla.verticalHeader().hide()
+        self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
+        self.tabla.setSelectionMode(QAbstractItemView.NoSelection)
+        enc = self.tabla.horizontalHeader()
+        enc.setSectionResizeMode(QHeaderView.Stretch)
+        v.addWidget(self.tabla)
+
+    COLUMNAS = ("Medición", "Máxima antes", "Máxima ahora", "Cambio", "ΔT antes", "ΔT ahora")
+
     @property
     def viewers(self):
         return [c.viewer for c in self.columnas]
 
-    def mostrar(self, img_a, img_b, rango=None):
-        """Ordena por fecha: la mas vieja queda a la izquierda."""
+    def mostrar(self, img_a, img_b, rango=None, leer_mediciones=None):
+        """Ordena por fecha: la mas vieja queda a la izquierda.
+        `leer_mediciones(img)` da las mediciones guardadas de cada foto."""
         a, b = sorted((img_a, img_b), key=lambda i: (i.meta.fecha is None, i.meta.fecha))
         self.imagenes = [a, b]
+        ma, mb = ((leer_mediciones(i) if leer_mediciones else Mediciones()) for i in (a, b))
         rango = rango or rango_auto_conjunto(self.imagenes)
         juntas = np.concatenate([a.temps.ravel(), b.temps.ravel()])
         for viewer in self.viewers:
             viewer.set_reparto(juntas)
-        self.columnas[0].mostrar(a, rango)
-        self.columnas[1].mostrar(b, rango, referencia=a)
+        self.columnas[0].mostrar(a, rango, mediciones=ma)
+        self.columnas[1].mostrar(b, rango, referencia=a, mediciones=mb)
+        self._llenar_tabla(a, ma, b, mb)
         # Si las dos estan en la misma carpeta, esa carpeta es el lugar
         carpetas = {i.path.parent for i in self.imagenes if i.path}
         carpeta = fecha_visible(carpetas.pop().name) if len(carpetas) == 1 else ""
         self.titulo.setText("Comparación — %s" % carpeta if carpeta else "Comparación")
         self.lapso.setText(_tiempo_entre(a, b))
+
+    def _llenar_tabla(self, a, ma, b, mb):
+        antes = {r.nombre: r for r in resultados(ma, a.temps)}
+        ahora = {r.nombre: r for r in resultados(mb, b.temps)}
+        # Primero las que estan en las dos (lo que de verdad se compara)
+        nombres = [n for n in ahora if n in antes] + [n for n in ahora if n not in antes] + \
+            [n for n in antes if n not in ahora]
+        self.tabla.setRowCount(len(nombres))
+        for fila, n in enumerate(nombres):
+            ra, rb = antes.get(n), ahora.get(n)
+            cambio = rb.maxima - ra.maxima if ra and rb else None
+
+            def t(v, signo=False):
+                if v is None:
+                    return "—"
+                return ("%+.1f °C" if signo else "%.1f °C") % v
+
+            def delta(r):
+                if r is None:
+                    return "—"
+                return "referencia" if r.es_referencia else t(r.delta_t, True)
+            valores = (n, t(ra and ra.maxima), t(rb and rb.maxima), t(cambio, True),
+                       delta(ra), delta(rb))
+            for c, texto in enumerate(valores):
+                it = QTableWidgetItem(texto)
+                if c:
+                    it.setTextAlignment(Qt.AlignRight | Qt.AlignVCenter)
+                subio_delta = (c == 5 and rb and ra and rb.delta_t is not None
+                               and ra.delta_t is not None and rb.delta_t - ra.delta_t >= 1.0)
+                if (c == 3 and cambio is not None and cambio >= 1.0) or subio_delta:
+                    it.setForeground(QColor(theme.color("aviso")))
+                self.tabla.setItem(fila, c, it)
+        hay = bool(nombres)
+        self.tabla.setVisible(hay)
+        self.titulo_tabla.setVisible(hay)
+        alto = self.tabla.horizontalHeader().height() + 4 + sum(
+            self.tabla.rowHeight(f) for f in range(min(len(nombres), 6)))
+        self.tabla.setFixedHeight(alto)
 
     def set_rango(self, lo, hi):
         for viewer in self.viewers:
