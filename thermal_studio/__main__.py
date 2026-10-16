@@ -13,8 +13,12 @@ def main():
 
     # El idioma va antes de importar la interfaz: algunos textos se arman al
     # importar los modulos. Lo guarda el instalador (o Ver > Idioma).
-    elegido = QSettings("ThermalStudio", "ThermalStudio").value("idioma")
-    i18n.set_idioma(elegido or i18n.idioma_del_sistema())
+    ajustes = QSettings("ThermalStudio", "ThermalStudio")
+    i18n.set_idioma(ajustes.value("idioma") or i18n.idioma_del_sistema())
+    i18n.set_unidad(ajustes.value("unidad", i18n.CELSIUS))  # Celsius por defecto
+    # Que los campos numericos de Qt usen el mismo separador decimal que el resto
+    from PySide6.QtCore import QLocale
+    QLocale.setDefault(QLocale({"es": "es_AR", "en": "en_US", "pt": "pt_BR"}[i18n.idioma()]))
 
     from .ui import theme
     from .ui.main_window import APP_NOMBRE, MainWindow

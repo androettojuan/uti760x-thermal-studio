@@ -218,10 +218,10 @@ class PanelInfo(QScrollArea):
         self.tmin.set(fmt_temp(mn.temp))
         self.tcentro.set(fmt_temp(img.centro().temp))
         self.tmedia.set(fmt_temp(img.media()))
-        self.delta.set(temp(mx.temp - mn.temp))
+        self.delta.set(temp(mx.temp - mn.temp, diferencia=True))
         self.ems.setText(num(m.emisividad, 2))
-        self.trefl.setText(_fmt(m.temp_reflejada, " °C"))
-        self.tamb.setText(_fmt(m.temp_ambiente, " °C"))
+        self.trefl.setText(temp(m.temp_reflejada, dec=0))
+        self.tamb.setText(temp(m.temp_ambiente, dec=0))
         self.hum.setText(_fmt(m.humedad, " %"))
         self.dist.setText(_fmt(m.distancia_m, " m"))
         self._pintar_aviso(img)
@@ -237,7 +237,8 @@ class PanelInfo(QScrollArea):
             self.titulo_visible.hide()
 
     def _pintar_aviso(self, img):
-        aviso = tr("Precisión de la conversión a grados: ±%s típico.") % temp(img.incertidumbre_c)
+        aviso = tr("Precisión de la conversión a grados: ±%s típico.") % temp(
+            img.incertidumbre_c, diferencia=True)
         if img.rango_alto:
             aviso = (tr("<b style='color:%s'>⚠ Rango alto sin calibrar</b><br>La foto se sacó en el "
                      "rango de temperatura alto de la cámara, que el programa todavía no sabe "
@@ -246,8 +247,9 @@ class PanelInfo(QScrollArea):
         elif img.fuera_de_rango:
             lo, hi = TempConverter.RANGO_VALIDADO_C
             aviso = (tr("<b style='color:%s'>⚠ Fuera del rango calibrado</b><br>La imagen tiene "
-                     "temperaturas fuera de %d a %d °C; los valores extremos son aproximados."
-                     "<br><br>%s") % (theme.color("aviso"), lo, hi, aviso))
+                     "temperaturas fuera de %s a %s; los valores extremos son aproximados."
+                     "<br><br>%s") % (theme.color("aviso"), temp(lo, dec=0), temp(hi, dec=0),
+                                      aviso))
         self.aviso.setText(aviso)
 
     def set_cursor(self, fila, col, temp):
@@ -488,6 +490,15 @@ class MainWindow(QMainWindow):
             a.setChecked(i18n.idioma() == codigo)
             a.triggered.connect(lambda _=False, c=codigo: self.set_idioma(c))
             grupo_idioma.addAction(a)
+        sub_unidad = m.addMenu(tr("Unidad de temperatura"))
+        grupo_unidad = QActionGroup(self)
+        for codigo, texto in ((i18n.CELSIUS, tr("Celsius (°C)")),
+                              (i18n.FAHRENHEIT, tr("Fahrenheit (°F)"))):
+            a = sub_unidad.addAction(texto)
+            a.setCheckable(True)
+            a.setChecked(i18n.unidad() == codigo)
+            a.triggered.connect(lambda _=False, c=codigo: self.set_unidad(c))
+            grupo_unidad.addAction(a)
         sub = m.addMenu(tr("Tema"))
         grupo = QActionGroup(self)
         for nombre, texto in ((theme.OSCURO, tr("Oscuro")), (theme.CLARO, tr("Claro"))):
@@ -525,6 +536,32 @@ class MainWindow(QMainWindow):
             v.hide()
         else:
             v.mostrar(self.panel.foto_visible, self.img.path.name if self.img.path else "")
+
+    def set_unidad(self, codigo):
+        """°C o °F. Se aplica al instante: se vuelve a mostrar lo que esta a la vista."""
+        if i18n.unidad() == codigo:
+            return
+        self.settings.setValue("unidad", codigo)
+        i18n.set_unidad(codigo)
+        for s in (self.spin_lo, self.spin_hi):
+            s.setSuffix(" " + i18n.simbolo())
+        for v in self._visores():
+            v.cbar.axis.picture = None  # que vuelva a escribir los numeros de la barra
+            v.cbar.axis.update()
+        if self.area_visor.comparando():
+            rango = self.comparacion.rango()
+            self.comparar([i.path for i in self.comparacion.imagenes])
+            self.comparacion.set_rango(*rango)
+        elif self.area_visor.viendo_evolucion():
+            self.evolucion._dibujar()
+            self.evolucion._llenar_tabla()
+        if self.img is not None:
+            rango = self.viewer.rango()
+            self.panel.mostrar(self.img)
+            self.viewer.mostrar(self.img, rango)
+            self.capa.actualizar()
+            self.panel.mediciones.refrescar()
+        self._sincronizar_spins()
 
     def set_idioma(self, codigo):
         """Se guarda y se aplica al volver a abrir: muchos textos se arman al
@@ -729,7 +766,7 @@ class MainWindow(QMainWindow):
         s.setRange(-100, 2000)
         s.setDecimals(1)
         s.setSingleStep(0.5)
-        s.setSuffix(" °C")
+        s.setSuffix(" " + i18n.simbolo())
         s.setAlignment(Qt.AlignRight)
         s.setMinimumWidth(84)
         s.setKeyboardTracking(False)
@@ -1072,7 +1109,8 @@ class MainWindow(QMainWindow):
 
     def _rango_desde_spins(self, *_):
         if self.img or self.area_visor.comparando():
-            self._vista_activa().set_rango(self.spin_lo.value(), self.spin_hi.value())
+            self._vista_activa().set_rango(i18n.de_unidad(self.spin_lo.value()),
+                                           i18n.de_unidad(self.spin_hi.value()))
 
     def _rango_desde_barra(self, lo, hi):
         self._sincronizar_spins()
@@ -1081,7 +1119,7 @@ class MainWindow(QMainWindow):
         lo, hi = self._vista_activa().rango()
         for s, v in ((self.spin_lo, lo), (self.spin_hi, hi)):
             s.blockSignals(True)
-            s.setValue(v)
+            s.setValue(i18n.a_unidad(v))
             s.blockSignals(False)
 
     # -- cursor ------------------------------------------------------------

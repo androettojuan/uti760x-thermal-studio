@@ -26,6 +26,7 @@ dentro de cada `.jpg` (640×512 temperaturas), no solo la imagen que se ve en pa
   a PNG y CSV (listo para Excel).
 - **Idiomas:** español, inglés y portugués de Brasil. El instalador pregunta el idioma y
   se cambia en *Ver → Idioma*. Números, fechas y CSV siguen el formato de cada idioma.
+- **Celsius o Fahrenheit** (*Ver → Unidad de temperatura*); Celsius por defecto.
 
 ## Precisión
 

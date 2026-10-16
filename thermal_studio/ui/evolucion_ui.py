@@ -19,7 +19,7 @@ from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido
 from . import theme
 from .widgets import boton, etiqueta, marco
-from ..i18n import fecha, fecha_hora, formato_fecha, plural, temp, tr
+from ..i18n import a_unidad, fecha, fecha_hora, formato_fecha, plural, simbolo, temp, tr
 
 # Colores de las series de mediciones (la maxima de la foto va en gris)
 COLORES = ["#ff7a1a", "#3d9bff", "#34c759", "#c86bfa", "#ffb020", "#ff5b4f", "#2ec4b6",
@@ -225,14 +225,14 @@ class VistaEvolucion(QWidget):
             return fecha.timestamp()
 
         if self.modo == VER_MAXIMAS and con_fecha:
-            g.setLabel("left", tr("Máxima"), units="°C")
+            g.setLabel("left", "%s (%s)" % (tr("Máxima"), simbolo()))
             pen = pg.mkPen(theme.color("texto_suave"), width=1.5, style=Qt.DashLine)
-            curva = g.plot([ts(f.fecha) for f in con_fecha], [f.maxima for f in con_fecha],
+            curva = g.plot([ts(f.fecha) for f in con_fecha], [a_unidad(f.maxima) for f in con_fecha],
                            pen=pen, symbol="o", symbolSize=7,
                            symbolBrush=theme.color("texto_suave"), name=tr("Máxima de la foto"))
             self._clic_en_puntos(curva, con_fecha)
         elif self.modo == VER_DELTAS:
-            g.setLabel("left", tr("ΔT contra la referencia"), units="°C")
+            g.setLabel("left", "%s (%s)" % (tr("ΔT contra la referencia"), simbolo()))
             g.addLine(y=0, pen=pg.mkPen(theme.color("borde"), width=1))
 
         for i, (nombre, puntos) in enumerate(sorted(series.items())):
@@ -241,7 +241,8 @@ class VistaEvolucion(QWidget):
             if not puntos:
                 continue
             color = COLORES[i % len(COLORES)]
-            ys = [p[1] if self.modo == VER_MAXIMAS else p[2] for p in puntos]
+            ys = [a_unidad(p[1]) if self.modo == VER_MAXIMAS else a_unidad(p[2], diferencia=True)
+                  for p in puntos]
             g.plot([ts(p[0]) for p in puntos], ys, pen=pg.mkPen(color, width=2), symbol="o",
                    symbolSize=8, symbolBrush=color, name=nombre)
         g.enableAutoRange()

@@ -56,3 +56,41 @@ def test_numeros_y_fechas_segun_idioma():
         assert i18n.temp(-9.0) == "-9,0 °C" and i18n.tr("Abrir imagen…") != "Abrir imagen…"
     finally:
         i18n.set_idioma(i18n.ESPANOL)
+
+
+def test_fahrenheit_convierte_temperaturas_y_diferencias_distinto():
+    import numpy as np
+    try:
+        i18n.set_unidad(i18n.FAHRENHEIT)
+        assert i18n.temp(100) == "212,0 °F"
+        assert i18n.temp(-40) == "-40,0 °F"
+        assert i18n.temp(4.7, signo=True) == "+8,5 °F"          # un ΔT no suma 32
+        assert i18n.temp(0.5, diferencia=True) == "0,9 °F"      # precision: diferencia
+        assert np.allclose(i18n.a_unidad(np.array([0.0, 100.0])), [32, 212])
+        assert i18n.de_unidad(212) == 100
+    finally:
+        i18n.set_unidad(i18n.CELSIUS)
+    assert i18n.temp(100) == "100,0 °C"                          # Celsius por defecto
+
+
+def test_csv_en_fahrenheit(tmp_path):
+    from types import SimpleNamespace
+    import numpy as np
+    from thermal_studio.core.exportar import csv_mediciones
+    from thermal_studio.core.mediciones import AREA, PUNTO, Mediciones
+    from thermal_studio.core.thermal_image import ThermalImage
+    t = np.full((20, 20), 20.0)
+    t[5, 5] = 30.0
+    img = ThermalImage(t, SimpleNamespace(fecha=None, emisividad=0.95))
+    ms = Mediciones()
+    ms.agregar(PUNTO, [5.5, 5.5])
+    ms.agregar(AREA, [10, 10, 15, 15])
+    ms.referencia = "A1"
+    try:
+        i18n.set_unidad(i18n.FAHRENHEIT)
+        csv_mediciones(tmp_path / "m.csv", img, ms)
+    finally:
+        i18n.set_unidad(i18n.CELSIUS)
+    texto = (tmp_path / "m.csv").read_text(encoding="utf-8-sig")
+    assert "Máxima (°F)" in texto
+    assert "P1;Punto;86,0;86,0;86,0;18,0;" in texto              # 30 °C; ΔT 10 °C = 18 °F

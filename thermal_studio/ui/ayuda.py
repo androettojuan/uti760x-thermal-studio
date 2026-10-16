@@ -79,7 +79,7 @@ temperaturas (CSV para Excel).</li>
 
 <h3>Precisión</h3>
 <p>Las temperaturas se calculan con los datos radiométricos de cada foto: ±%(tipico)s
-típico entre %(lo)d y %(hi)d °C, comparado con lo que muestra la cámara. Las fotos sacadas
+típico entre %(lo)s y %(hi)s, comparado con lo que muestra la cámara. Las fotos sacadas
 en el rango alto de la cámara todavía no están calibradas y lo avisan.</p>
 """)
 
@@ -116,8 +116,8 @@ def _dialogo(parent, titulo, html, ancho=640, alto=640):
 
 def mostrar_guia(parent):
     lo, hi = TempConverter.RANGO_VALIDADO_C
-    _dialogo(parent, tr("Guía rápida"), GUIA % {"tipico": temp(TempConverter.ERROR_TIPICO_C),
-                                             "lo": lo, "hi": hi}).exec()
+    _dialogo(parent, tr("Guía rápida"), GUIA % {"tipico": temp(TempConverter.ERROR_TIPICO_C, diferencia=True),
+                                             "lo": temp(lo, dec=0), "hi": temp(hi, dec=0)}).exec()
 
 
 def mostrar_acerca_de(parent):

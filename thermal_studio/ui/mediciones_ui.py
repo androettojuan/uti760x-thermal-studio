@@ -17,7 +17,7 @@ from ..core.mediciones import AREA, LINEA, PUNTO, Mediciones, estadistica, perfi
 from . import theme
 from .viewer import MarcasSinClic
 from .widgets import boton, etiqueta
-from ..i18n import num, temp, tr
+from ..i18n import a_unidad, num, simbolo, temp, tr
 
 COLOR_MEDICION = "#ffffff"
 COLOR_SOMBRA = (0, 0, 0, 170)
@@ -25,11 +25,11 @@ TAM_MINIMO = 2.0  # en pixeles de imagen: menos que esto es un clic, no un arras
 
 
 def _fmt(t):
-    return num(t)
+    return num(a_unidad(t))
 
 
 def _fmt_delta(d):
-    return "" if d is None else "%+.1f" % d
+    return "" if d is None else num(a_unidad(d, diferencia=True), signo=True)
 
 
 class _Punto(pg.TargetItem):
@@ -350,7 +350,7 @@ class PanelMediciones(QWidget):
         self.grafico.setMinimumHeight(150)
         self.grafico.setMenuEnabled(False)
         self.grafico.setMouseEnabled(False, False)
-        self.grafico.setLabel("left", "°C")
+        self.grafico.setLabel("left", simbolo())
         self.grafico.setLabel("bottom", tr("píxeles"))
         self.curva = self.grafico.plot([], [])
         v.addWidget(self.grafico)
@@ -470,7 +470,8 @@ class PanelMediciones(QWidget):
             self.titulo_perfil.hide()
             return
         dist, valores = perfil(m, self.temps)
-        self.curva.setData(dist, valores)
+        self.curva.setData(dist, a_unidad(valores))
+        self.grafico.setLabel("left", simbolo())
         self.titulo_perfil.setText(tr("Perfil de %s") % m.nombre)
         self.titulo_perfil.show()
         self.grafico.show()

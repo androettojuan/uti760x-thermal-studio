@@ -5,7 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter
 
 from ..core import palettes
-from ..i18n import temp
+from ..i18n import a_unidad, temp
 from ..core.thermal_image import posiciones_ecualizadas
 from . import theme
 
@@ -94,6 +94,11 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.cbar = pg.ColorBarItem(values=(0, 1), colorMap=_colormap(self.paleta, False),
                                     interactive=True, rounding=0.1, width=22)
         self.cbar.setImageItem(self.item)
+        # La imagen esta en Celsius: los numeros de la barra se muestran en la
+        # unidad elegida (°C o °F) sin tocar los datos
+        original = self.cbar.axis.tickStrings
+        self.cbar.axis.tickStrings = lambda values, scale, spacing: original(
+            [a_unidad(v) for v in values], scale, a_unidad(spacing, diferencia=True))
         self.cbar.sigLevelsChangeFinished.connect(self._barra_soltada)
         self.addItem(self.cbar, row=0, col=1)
 

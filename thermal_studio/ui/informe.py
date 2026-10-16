@@ -17,7 +17,7 @@ from ..core.library import fecha_visible
 from ..core.mediciones import AREA, LINEA, NOMBRES_TIPO, PUNTO, estadistica, resultados
 from ..core.thermal_image import posiciones_ecualizadas, tabla_colores
 from ..core.uti760x import TempConverter
-from ..i18n import fecha, fecha_hora, num, temp, tr
+from ..i18n import a_unidad, fecha, fecha_hora, num, simbolo, temp, tr
 
 COLOR_TRAZO = QColor("#ffffff")
 COLOR_SOMBRA = QColor(0, 0, 0, 190)
@@ -156,7 +156,8 @@ def _barra(p, rect, lo, hi, ajustes, pos, escala):
         y = rect.bottom() - rect.height() * k / 5
         p.drawLine(QPointF(rect.right(), y), QPointF(rect.right() + 4 * escala, y))
         p.drawText(QRectF(rect.right() + 6 * escala, y - 8 * escala, 40 * escala, 16 * escala),
-                   Qt.AlignLeft | Qt.AlignVCenter, "%.0f" % t)
+                   Qt.AlignLeft | Qt.AlignVCenter,
+                   "%.0f%s" % (a_unidad(t), " " + simbolo() if k == 5 else ""))
 
 
 # -- PDF -------------------------------------------------------------------
@@ -355,7 +356,7 @@ def _caratula(pg, fotos, datos, lugar):
     nota = (tr("ΔT: máxima de cada medición menos la máxima de la medición de referencia de "
             "la misma foto. Temperaturas calculadas por Thermal Studio a partir de los "
             "datos radiométricos de la cámara: ±%s típico en el rango normal.")
-            % temp(TempConverter.ERROR_TIPICO_C))
+            % temp(TempConverter.ERROR_TIPICO_C, diferencia=True))
     pg.fuente(8, color=GRIS)
     if not pg.cabe(y, pg.alto_texto(pg.ancho_mm, nota)):
         pg.nueva_pagina()
@@ -464,5 +465,5 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
         pg.texto(0, pg.alto_mm - 14, pg.ancho_mm,
                  tr("Atención: foto en el rango alto de la cámara, sin calibrar; las temperaturas "
                  "no son confiables.") if img.rango_alto else
-                 tr("Hay zonas fuera del rango calibrado (%d a %d °C): sus valores son aproximados.")
-                 % TempConverter.RANGO_VALIDADO_C, envolver=True)
+                 tr("Hay zonas fuera del rango calibrado (%s a %s): sus valores son aproximados.")
+                 % tuple(temp(v, dec=0) for v in TempConverter.RANGO_VALIDADO_C), envolver=True)

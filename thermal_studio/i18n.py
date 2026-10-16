@@ -72,9 +72,51 @@ def num(v, dec=1, signo=False):
     return t.replace(".", _DECIMAL[_actual])
 
 
-def temp(v, dec=1, signo=False):
-    """'31,5 °C' (o '31.5 °C' en ingles); '—' si es None."""
-    return "—" if v is None else num(v, dec, signo) + " °C"
+# -- unidad de temperatura -----------------------------------------------
+# Todo el programa calcula en Celsius; la unidad elegida solo cambia lo que se
+# muestra o exporta. Ojo: una temperatura y una diferencia (Delta T, rango,
+# precision) se convierten distinto: 4,7 C de diferencia son 8,5 F, sin +32.
+CELSIUS, FAHRENHEIT = "C", "F"
+_unidad = CELSIUS
+
+
+def set_unidad(u):
+    global _unidad
+    _unidad = FAHRENHEIT if u == FAHRENHEIT else CELSIUS
+
+
+def unidad():
+    return _unidad
+
+
+def simbolo():
+    return "°F" if _unidad == FAHRENHEIT else "°C"
+
+
+def a_unidad(v, diferencia=False):
+    """Celsius -> unidad elegida. Acepta numeros o arrays de numpy."""
+    if v is None or _unidad == CELSIUS:
+        return v
+    return v * 1.8 if diferencia else v * 1.8 + 32
+
+
+def de_unidad(v, diferencia=False):
+    """Unidad elegida -> Celsius (por ejemplo, lo que se escribe en el rango)."""
+    if v is None or _unidad == CELSIUS:
+        return v
+    return v / 1.8 if diferencia else (v - 32) / 1.8
+
+
+def temp(v, dec=1, signo=False, diferencia=None):
+    """'31,5 °C' en la unidad y con el decimal del idioma; '—' si es None.
+
+    Con signo, se toma como diferencia (cambio, Delta T) salvo que se diga
+    otra cosa; una diferencia sin signo se pide con diferencia=True.
+    """
+    if v is None:
+        return "—"
+    dif = signo if diferencia is None else diferencia
+    return num(a_unidad(v, dif), dec, signo) + " " + simbolo()
 
 
 def fecha(dt):
