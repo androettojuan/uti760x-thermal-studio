@@ -1,6 +1,9 @@
-"""Paletas de color: las de la camara UNI-T (256 colores RGB cada una).
+"""Paletas de color de la camara UNI-T UTi760x (256 colores RGB cada una).
 
-Sacadas de fotos de la propia camara (la barra de color de cada foto).
+Sacadas de fotos de la propia camara: la barra de color que dibuja en cada
+foto, comparada con la imagen en gris que colorea (herramientas/paletas/ tiene los
+scripts y los datos). Asi el programa muestra los mismos colores que la
+pantalla de la camara.
 """
 import json
 from functools import lru_cache
@@ -11,14 +14,15 @@ import numpy as np
 # id interno -> nombre para mostrar, en el orden de los menus
 NOMBRES = {
     "iron": "Hierro",
-    "rainbow": "Arcoiris",
-    "rainbow_hc": "Arcoiris alto contraste",
+    "rainbow": "Arcoíris",
+    "rainbow_hc": "Arcoíris alto contraste",
+    "lava": "Lava",
     "white_hot": "Blanco caliente",
     "black_hot": "Negro caliente",
-    "red_hot": "Rojo caliente",
-    "lava": "Lava",
-    "highlight_5p": "Resaltar extremos 5%",
-    "highlight_10p": "Resaltar extremos 10%",
+    "highlight": "Grises con alerta roja",
+    "red": "Rojo",
+    "green": "Verde",
+    "blue": "Azul",
 }
 
 POR_DEFECTO = "iron"
@@ -37,10 +41,7 @@ def disponibles():
 def get(nombre, invertir=False):
     """Array (256, 3) uint8. Indice 0 = temperatura mas fria."""
     datos = _datos()
-    if nombre == "black_hot":
-        lut = datos["white_hot"][::-1]
-    elif nombre in datos:
-        lut = datos[nombre]
-    else:
+    if nombre not in datos:
         raise KeyError("Paleta desconocida: %s" % nombre)
+    lut = datos[nombre]
     return np.ascontiguousarray(lut[::-1] if invertir else lut)

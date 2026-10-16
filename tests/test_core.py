@@ -71,7 +71,9 @@ def test_paletas():
     for nombre in palettes.disponibles():
         lut = palettes.get(nombre)
         assert lut.shape == (256, 3) and lut.dtype == np.uint8
-    assert (palettes.get("black_hot") == palettes.get("white_hot")[::-1]).all()
+    # Sacadas por separado de la camara: tienen que ser casi una la inversa de la otra
+    dif = np.abs(palettes.get("black_hot").astype(int) - palettes.get("white_hot")[::-1])
+    assert dif.mean() < 6
     assert (palettes.get("iron", invertir=True) == palettes.get("iron")[::-1]).all()
 
 
