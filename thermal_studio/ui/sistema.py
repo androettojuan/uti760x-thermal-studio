@@ -124,6 +124,48 @@ def conectar_wifi(ssid):
     return codigo == 0, salida.strip()
 
 
+def _wifi_sin_ip_en_ipconfig(salida):
+    """Mira en la salida de ipconfig si el adaptador Wi-Fi tiene solo 169.254.x."""
+    for bloque in re.split(r"\r?\n(?=\S)", salida):
+        cab = bloque.split("\n", 1)[0].lower()
+        if "wi-fi" not in cab and "wireless" not in cab:
+            continue
+        ips = re.findall(r"IPv4[^:]*:\s*([\d.]+)", bloque)
+        if ips and all(ip.startswith("169.254.") for ip in ips):
+            return True
+    return False
+
+
+def wifi_sin_ip():
+    """True si la placa WiFi tiene solo una IP 169.254.x: esta asociada a la red
+    pero nadie le dio direccion (a la camara a veces se le traba el DHCP)."""
+    if es_wsl():
+        codigo, salida = _correr(["ipconfig.exe"])
+        return codigo == 0 and _wifi_sin_ip_en_ipconfig(salida)
+    from PySide6.QtNetwork import QHostAddress, QNetworkInterface
+    for iface in QNetworkInterface.allInterfaces():
+        if iface.type() != QNetworkInterface.Wifi:
+            continue
+        if not iface.flags() & QNetworkInterface.IsUp:
+            continue
+        ips = [e.ip().toString() for e in iface.addressEntries()
+               if e.ip().protocol() == QHostAddress.IPv4Protocol]
+        if ips and all(ip.startswith("169.254.") for ip in ips):
+            return True
+    return False
+
+
+def reconectar_wifi(ssid):
+    """Desconecta y vuelve a conectar la red, para que pida IP de nuevo."""
+    if _usa_netsh():
+        _correr(["netsh", "wlan", "disconnect"])
+    else:
+        _correr(["nmcli", "connection", "down", "id", ssid])
+    import time
+    time.sleep(2)
+    return conectar_wifi(ssid)
+
+
 def abrir_redes_wifi():
     """Abre la lista de redes WiFi del sistema para elegir una a mano."""
     if es_wsl():

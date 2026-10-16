@@ -313,6 +313,10 @@ class LibraryPanel(QFrame):
             texto = "Sin conexión"
             if estado.wifi and estado.wifi != red:
                 texto += " · estás en la red «%s»" % estado.wifi
+            elif estado.wifi == red and red and estado.sin_ip:
+                tok = "aviso"
+                texto += (" · conectado a «%s», pero la cámara no le dio dirección a la PC "
+                          "(a veces le pasa). Tocá «Reconectar»." % red)
             elif estado.wifi == red and red:
                 texto += " · conectado a «%s» pero la cámara no responde. ¿Tiene el FTP " \
                          "activado?" % red
@@ -326,7 +330,12 @@ class LibraryPanel(QFrame):
         if not self.importando():
             self.pila_botones.setCurrentIndex(0 if conectada else 1)
         self._reintentar = bool(red) and estado.wifi == red and not conectada
-        if self._reintentar:
+        self._reconectar = self._reintentar and estado.sin_ip
+        if self._reconectar:
+            self.btn_conectar.setText("Reconectar")
+            self.btn_conectar.setToolTip("Desconectar y volver a conectar el WiFi «%s» para que "
+                                         "la cámara le dé dirección a la PC" % red)
+        elif self._reintentar:
             self.btn_conectar.setText("Reintentar")
             self.btn_conectar.setToolTip("Volver a buscar la cámara en la red «%s»" % red)
         elif red:
@@ -343,6 +352,14 @@ class LibraryPanel(QFrame):
 
     def conectar(self):
         red = self.red_camara()
+        if getattr(self, "_reconectar", False):
+            self.monitor.conectar_wifi(red, reconectar=True)
+            self._conectando = QTimer(self)
+            self._conectando.setSingleShot(True)
+            self._conectando.timeout.connect(self._conexion_vencida)
+            self._conectando.start(30000)
+            self._estado_camara(self.monitor.estado)
+            return
         if getattr(self, "_reintentar", False):
             self.monitor.acelerar()
             return

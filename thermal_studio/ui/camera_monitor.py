@@ -23,6 +23,7 @@ class Estado:
     wifi: str | None            # red a la que esta conectada la PC
     nuevas: int | None = None   # fotos sin importar; None = todavia no se sabe
     en_camara: int | None = None
+    sin_ip: bool = False        # conectada al WiFi pero con IP 169.254.x
 
 
 def _emitir(senal, *args):
@@ -34,18 +35,19 @@ def _emitir(senal, *args):
 
 
 class _Relay(QObject):
-    sondeo = Signal(bool, object)   # conectada, wifi
+    sondeo = Signal(bool, object, bool)   # conectada, wifi, sin_ip
     conteo = Signal(int, int)       # nuevas, en camara
     conexion = Signal(bool, str)    # resultado de pedir conectar el WiFi
 
 
 class _ConectarWifi(QRunnable):
-    def __init__(self, ssid, relay):
+    def __init__(self, ssid, relay, reconectar=False):
         super().__init__()
-        self.ssid, self.relay = ssid, relay
+        self.ssid, self.relay, self.reconectar = ssid, relay, reconectar
 
     def run(self):
-        _emitir(self.relay.conexion, *sistema.conectar_wifi(self.ssid))
+        f = sistema.reconectar_wifi if self.reconectar else sistema.conectar_wifi
+        _emitir(self.relay.conexion, *f(self.ssid))
 
 
 class _Sondeo(QRunnable):
@@ -55,7 +57,9 @@ class _Sondeo(QRunnable):
 
     def run(self):
         ok = camara_disponible(self.conexion["host"], self.conexion["puerto"])
-        _emitir(self.relay.sondeo, ok, sistema.wifi_actual())
+        wifi = sistema.wifi_actual()
+        sin_ip = bool(wifi) and not ok and sistema.wifi_sin_ip()
+        _emitir(self.relay.sondeo, ok, wifi, sin_ip)
 
 
 class _Conteo(QRunnable):
@@ -114,9 +118,10 @@ class MonitorCamara(QObject):
         QTimer.singleShot(30000, lambda: self._timer.start(INTERVALO_MS))
         self.sondear()
 
-    def conectar_wifi(self, ssid):
-        """Pide al sistema conectarse a la red de la camara (ya guardada)."""
-        self._pool.start(_ConectarWifi(ssid, self._relay))
+    def conectar_wifi(self, ssid, reconectar=False):
+        """Pide al sistema conectarse a la red de la camara (ya guardada).
+        Con reconectar, primero se desconecta, para que pida IP de nuevo."""
+        self._pool.start(_ConectarWifi(ssid, self._relay, reconectar))
         self.acelerar()
 
     def sondear(self):
@@ -130,7 +135,7 @@ class MonitorCamara(QObject):
         if self.estado.conectada:
             self._pool.start(_Conteo(self.conexion(), self.biblioteca(), self._relay))
 
-    def _sondeado(self, conectada, wifi):
+    def _sondeado(self, conectada, wifi, sin_ip=False):
         self._ocupado = False
         antes = self.estado
         if conectada and not antes.conectada:
@@ -140,7 +145,7 @@ class MonitorCamara(QObject):
         elif conectada:
             self.estado = Estado(True, wifi, antes.nuevas, antes.en_camara)
         else:
-            self.estado = Estado(False, wifi)
+            self.estado = Estado(False, wifi, sin_ip=sin_ip)
         if self.estado != antes:
             self.cambiado.emit(self.estado)
 
