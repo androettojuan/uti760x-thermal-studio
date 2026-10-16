@@ -15,7 +15,7 @@ from ..core.library import Library
 from ..core.mediciones import AREA, LINEA, PUNTO
 from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
-from . import sistema, theme
+from . import ayuda, sistema, theme
 from .compare import DialogoElegirSegunda, VistaComparacion
 from .evolucion_ui import VistaEvolucion
 from .dialogo_informe import ABIERTA, CARPETA, ELEGIDAS, DialogoInforme
@@ -487,6 +487,11 @@ class MainWindow(QMainWindow):
             a.triggered.connect(lambda _=False, n=nombre: self.set_tema(n))
             grupo.addAction(a)
         self._acciones_tema = {a.text(): a for a in grupo.actions()}
+
+        m = mb.addMenu("Ay&uda")
+        m.addAction("Guía rápida", lambda: ayuda.mostrar_guia(self)).setShortcut(
+            QKeySequence.HelpContents)
+        m.addAction("Acerca de Thermal Studio", lambda: ayuda.mostrar_acerca_de(self))
 
     def _suavizado_cambiado(self, activo):
         self.settings.setValue("suavizar", activo)

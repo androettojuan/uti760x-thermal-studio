@@ -37,6 +37,8 @@ Name: "escritorio"; Description: "Crear un acceso directo en el escritorio"; Gro
 
 [Files]
 Source: "..\dist\ThermalStudio\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+; Licencia del programa: se muestra en Ayuda > Acerca de
+Source: "..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\Thermal Studio"; Filename: "{app}\ThermalStudio.exe"
