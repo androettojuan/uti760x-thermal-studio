@@ -1,2 +1,2 @@
 """Thermal Studio: análisis y organización de imágenes de la UNI-T UTi760x."""
-__version__ = "0.2.0"
+__version__ = "0.3.0"
