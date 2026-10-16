@@ -27,6 +27,37 @@ def _colormap(paleta, invertir, posiciones=None):
     return pg.ColorMap(posiciones, lut)
 
 
+class MarcasSinClic(pg.ScatterPlotItem):
+    """Marcas que no se quedan con los clics: si no, un clic justo sobre la
+    marca del centro no llegaba a la herramienta de medir."""
+
+    def mouseClickEvent(self, ev):
+        ev.ignore()
+
+
+class VistaImagen(pg.ViewBox):
+    """ViewBox que deja a otro (la capa de mediciones) quedarse con los clics
+    y arrastres. Si el manejador devuelve False, se comporta como siempre:
+    arrastrar mueve la imagen."""
+
+    def __init__(self):
+        super().__init__()
+        self.manejador_clic = None
+        self.manejador_arrastre = None
+
+    def mouseClickEvent(self, ev):
+        if self.manejador_clic and self.manejador_clic(ev):
+            ev.accept()
+            return
+        super().mouseClickEvent(ev)
+
+    def mouseDragEvent(self, ev, axis=None):
+        if self.manejador_arrastre and self.manejador_arrastre(ev):
+            ev.accept()
+            return
+        super().mouseDragEvent(ev, axis)
+
+
 def fmt_temp(t):
     return "—" if t is None else "%.1f °C" % t
 
@@ -50,7 +81,8 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.contraste = CONTRASTE_CAMARA
         self.temps_reparto = None  # si no es None, ecualiza con esto y no con la imagen
 
-        self.vb = self.addViewBox(row=0, col=0)
+        self.vb = VistaImagen()
+        self.addItem(self.vb, row=0, col=0)
         self.vb.setAspectLocked(True)
         self.vb.invertY(True)
         self.vb.setMenuEnabled(False)
@@ -65,7 +97,7 @@ class ThermalViewer(pg.GraphicsLayoutWidget):
         self.addItem(self.cbar, row=0, col=1)
 
         # Marcadores de max / min / centro
-        self.marcas = pg.ScatterPlotItem(pxMode=True, size=14)
+        self.marcas = MarcasSinClic(pxMode=True, size=14)
         self.vb.addItem(self.marcas)
         self.etiquetas = []
         for color in (COLOR_MAX, COLOR_MIN, COLOR_CENTRO):

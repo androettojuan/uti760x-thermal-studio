@@ -5,6 +5,7 @@
     ├── Subestacion Norte/Tablero A/...                  <- carpetas del usuario
     └── .thermal_studio/                                 <- datos internos (oculta)
         ├── importadas.json   registro de lo que ya se importo de la camara
+        ├── mediciones/       <nombre de la foto>.json, uno por foto medida
         └── miniaturas/       cache de miniaturas
 
 Las rutas de carpeta se manejan relativas a la raiz, con "/" como separador
@@ -15,6 +16,8 @@ import re
 import shutil
 from datetime import datetime
 from pathlib import Path
+
+from .mediciones import Mediciones
 
 CARPETA_INTERNA = ".thermal_studio"
 CARPETA_IMPORTADAS = "Importadas"
@@ -80,6 +83,7 @@ class Library:
         self.miniaturas.mkdir(exist_ok=True)
         (self.raiz / CARPETA_IMPORTADAS).mkdir(exist_ok=True)
         self._registro_path = self.interna / "importadas.json"
+        self.carpeta_mediciones = self.interna / "mediciones"
 
     # -- rutas -------------------------------------------------------------
     def abs(self, rel):
@@ -249,3 +253,30 @@ class Library:
         """Carpeta relativa donde cae una foto importada: Importadas/AAAA-MM-DD."""
         fecha = fecha_de_nombre(nombre_foto) or "sin fecha"
         return "%s/%s" % (CARPETA_IMPORTADAS, fecha)
+
+    # -- mediciones --------------------------------------------------------
+    # Se guardan por nombre de archivo y no por ruta: los nombres de la camara
+    # llevan fecha y hora, asi que son unicos, y al mover una foto de carpeta
+    # sus mediciones la siguen sin hacer nada.
+    def _ruta_mediciones(self, nombre_foto):
+        return self.carpeta_mediciones / (Path(nombre_foto).name + ".json")
+
+    def leer_mediciones(self, nombre_foto):
+        """Mediciones guardadas de una foto (vacias si no tiene)."""
+        try:
+            d = json.loads(self._ruta_mediciones(nombre_foto).read_text(encoding="utf-8"))
+        except (FileNotFoundError, json.JSONDecodeError):
+            return Mediciones()
+        return Mediciones.desde_dict(d)
+
+    def guardar_mediciones(self, nombre_foto, mediciones):
+        """Guarda (o borra, si quedo vacia) la lista de mediciones de una foto."""
+        destino = self._ruta_mediciones(nombre_foto)
+        if not mediciones.lista:
+            destino.unlink(missing_ok=True)
+            return
+        destino.parent.mkdir(exist_ok=True)
+        tmp = destino.with_suffix(".tmp")
+        tmp.write_text(json.dumps(mediciones.a_dict(), indent=1, ensure_ascii=False),
+                       encoding="utf-8")
+        tmp.replace(destino)

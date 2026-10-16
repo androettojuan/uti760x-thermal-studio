@@ -6,16 +6,18 @@ from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QPixmap
 from PySide6.QtWidgets import (
     QApplication, QComboBox, QDialog, QDialogButtonBox, QDoubleSpinBox, QFileDialog,
     QFormLayout, QGridLayout, QHBoxLayout, QLabel, QLineEdit, QMainWindow, QMessageBox,
-    QScrollArea, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget,
+    QButtonGroup, QScrollArea, QSpinBox, QSplitter, QStackedWidget, QVBoxLayout, QWidget,
 )
 
 from ..core import camera_ftp, palettes
 from ..core.importer import Modo
 from ..core.library import Library
+from ..core.mediciones import AREA, LINEA, PUNTO
 from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido, TempConverter
 from . import sistema, theme
 from .compare import VistaComparacion
+from .mediciones_ui import CapaMediciones, PanelMediciones
 from .library_panel import LibraryPanel
 from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
 from .widgets import (
@@ -155,6 +157,11 @@ class PanelInfo(QScrollArea):
         grid.addWidget(self.tmedia, 1, 1)
         grid.addWidget(self.delta, 2, 0, 1, 2)
         lay.addLayout(grid)
+
+        # Mediciones
+        lay.addSpacing(4)
+        self.mediciones = PanelMediciones()
+        lay.addWidget(self.mediciones)
 
         # Parametros
         lay.addSpacing(4)
@@ -339,6 +346,7 @@ class MainWindow(QMainWindow):
         self.setAcceptDrops(True)
 
         self.viewer = ThermalViewer()
+        self.capa = CapaMediciones(self.viewer)
         self.viewer.cursorMovido.connect(self._cursor_movido)
         self.viewer.rangoCambiado.connect(self._rango_desde_barra)
         self.comparacion = VistaComparacion()
@@ -382,6 +390,7 @@ class MainWindow(QMainWindow):
         self.setCentralWidget(raiz_ui)
 
         self._crear_menu()
+        self._conectar_mediciones()
         self.statusBar().showMessage("Listo")
 
     # -- menu --------------------------------------------------------------
@@ -427,8 +436,10 @@ class MainWindow(QMainWindow):
         self.act_comparar = m.addAction("Comparar las dos fotos seleccionadas",
                                         self.comparar_seleccionadas)
         self.act_comparar.setShortcut("C")
-        a = m.addAction("Cerrar comparación", self.cerrar_comparacion)
+        a = m.addAction("Soltar herramienta / cerrar comparación", self._escape)
         a.setShortcut(Qt.Key_Escape)
+        a = m.addAction("Borrar la medición elegida", self.borrar_medicion)
+        a.setShortcut(QKeySequence.Delete)
         m.addSeparator()
         sub = m.addMenu("Tema")
         grupo = QActionGroup(self)
@@ -591,6 +602,26 @@ class MainWindow(QMainWindow):
         self.btn_marcas.toggled.connect(
             lambda on: [v.set_marcas_visibles(on) for v in self._visores()])
         h.addWidget(self.btn_marcas)
+        h.addWidget(separador())
+
+        # Herramientas de medicion
+        h.addWidget(etiqueta("Medir", "suave"))
+        self.grupo_herr = QButtonGroup(self)
+        self.grupo_herr.setExclusive(True)
+        self.botones_herr = {}
+        for herr, icono, texto, atajo in (
+                (None, "mdi6.cursor-default-outline", "Mover y elegir (Esc)", "Esc"),
+                (PUNTO, "mdi6.crosshairs", "Punto: clic en la imagen (P)", "P"),
+                (LINEA, "mdi6.vector-line", "Línea con perfil: arrastrá en la imagen (L)", "L"),
+                (AREA, "mdi6.vector-square", "Área: arrastrá en la imagen (R)", "R")):
+            b = boton_icono(icono, texto, checkable=True)
+            if atajo != "Esc":
+                b.setShortcut(atajo)
+            b.clicked.connect(lambda _=False, x=herr: self.set_herramienta(x))
+            self.grupo_herr.addButton(b)
+            self.botones_herr[herr] = b
+            h.addWidget(b)
+        self.botones_herr[None].setChecked(True)
         h.addStretch(1)
 
         # Muestra el tema al que se pasa: sol en oscuro, luna en claro
@@ -643,6 +674,9 @@ class MainWindow(QMainWindow):
         self.area_visor.mostrar_visor()
         self.viewer.mostrar(img, rango)
         self.panel.mostrar(img)
+        mediciones = self.biblioteca.leer_mediciones(path.name)
+        self.capa.set_mediciones(mediciones)
+        self.panel.mediciones.set_datos(mediciones, img.temps)
         if self._ventana_visible is not None and self._ventana_visible.isVisible():
             self._actualizar_visible()
         self._sincronizar_spins()
@@ -671,6 +705,62 @@ class MainWindow(QMainWindow):
         self.btn_ant.setEnabled(simple and self.indice > 0)
         self.btn_sig.setEnabled(simple and 0 <= self.indice < len(self.archivos) - 1)
 
+    # -- mediciones --------------------------------------------------------
+    def _conectar_mediciones(self):
+        capa, panel = self.capa, self.panel.mediciones
+        capa.cambiaron.connect(panel.refrescar)
+        capa.terminaron.connect(self._guardar_mediciones)
+        capa.seleccionada.connect(lambda n: panel.elegir(n))
+        panel.seleccionada.connect(capa.elegir)
+        panel.renombrar.connect(self._renombrar_medicion)
+        panel.borrar.connect(self.borrar_medicion)
+        panel.referenciaCambiada.connect(self._referencia_cambiada)
+
+    def set_herramienta(self, herramienta):
+        if self.area_visor.comparando() and herramienta is not None:
+            self.statusBar().showMessage("Para medir, cerrá la comparación (Esc).", 5000)
+            herramienta = None
+        elif self.img is None and herramienta is not None:
+            self.statusBar().showMessage("Abrí una foto para medir sobre ella.", 5000)
+            herramienta = None
+        self.capa.set_herramienta(herramienta)
+        self.botones_herr[herramienta].setChecked(True)
+        if herramienta is not None:
+            self.viewer.setFocus()
+
+    def _escape(self):
+        if self.capa.herramienta is not None:
+            self.set_herramienta(None)
+        else:
+            self.cerrar_comparacion()
+
+    def borrar_medicion(self, nombre=None):
+        nombre = nombre or self.capa.elegida
+        if nombre:
+            self.capa.borrar(nombre)
+            self.panel.mediciones.refrescar()
+
+    def _renombrar_medicion(self, viejo, nuevo):
+        if self.capa.mediciones.renombrar(viejo, nuevo):
+            self.capa.renombrado(viejo, nuevo.strip())
+            self._guardar_mediciones()
+        else:
+            self.statusBar().showMessage(
+                "No se puede usar ese nombre: está vacío o ya lo tiene otra medición.", 6000)
+        self.panel.mediciones.refrescar()
+
+    def _referencia_cambiada(self):
+        self.panel.mediciones.refrescar()
+        self._guardar_mediciones()
+
+    def _guardar_mediciones(self):
+        if self.img is None or self.img.path is None:
+            return
+        try:
+            self.biblioteca.guardar_mediciones(self.img.path.name, self.capa.mediciones)
+        except OSError as e:
+            self.statusBar().showMessage("No se pudieron guardar las mediciones: %s" % e, 10000)
+
     # -- comparacion -------------------------------------------------------
     def comparar_seleccionadas(self):
         rutas = self.panel_bib.galeria.rutas_seleccionadas()
@@ -689,6 +779,7 @@ class MainWindow(QMainWindow):
             return
         fijo = self.btn_fijar.isChecked() and (self.img or self.area_visor.comparando())
         self.comparacion.mostrar(a, b, self._vista_activa().rango() if fijo else None)
+        self.set_herramienta(None)
         self.area_visor.mostrar_comparacion()
         self.comparacion.setFocus()
         self._sincronizar_spins()
