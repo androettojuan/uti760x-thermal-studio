@@ -22,11 +22,12 @@ from .mediciones_ui import CapaMediciones
 from .thumbnails import TAMANO, CargadorMiniaturas
 from .viewer import ThermalViewer, fmt_temp
 from .widgets import TarjetaDato, boton, etiqueta, marco
+from ..i18n import fecha, fecha_hora, num, plural, temp, tr
 
 
 def _fecha(img):
     f = img.meta.fecha
-    return (f.strftime("%d/%m/%Y"), f.strftime("%H:%M")) if f else ("Sin fecha", "")
+    return (fecha(f), f.strftime("%H:%M")) if f else (tr("Sin fecha"), "")
 
 
 def _tiempo_entre(a, b):
@@ -36,13 +37,13 @@ def _tiempo_entre(a, b):
         return ""
     dias = abs((fb.date() - fa.date()).days)
     if dias == 0:
-        return "Misma fecha"
+        return tr("Misma fecha")
     if dias < 60:
-        return "Pasaron %d día%s" % (dias, "" if dias == 1 else "s")
+        return plural(dias, "Pasó %d día", "Pasaron %d días") % dias
     meses = round(dias / 30.44)
     if meses < 24:
-        return "Pasaron %d meses (%d días)" % (meses, dias)
-    return "Pasaron %.1f años (%d días)" % (dias / 365.25, dias)
+        return tr("Pasaron %d meses (%d días)") % (meses, dias)
+    return tr("Pasaron %s años (%d días)") % (num(dias / 365.25), dias)
 
 
 class _Columna(QWidget):
@@ -71,9 +72,9 @@ class _Columna(QWidget):
 
         datos = QGridLayout()
         datos.setSpacing(8)
-        self.tmax = TarjetaDato("Máxima", "max")
-        self.tmedia = TarjetaDato("Media")
-        self.tmin = TarjetaDato("Mínima", "min")
+        self.tmax = TarjetaDato(tr("Máxima"), "max")
+        self.tmedia = TarjetaDato(tr("Media"))
+        self.tmin = TarjetaDato(tr("Mínima"), "min")
         for i, t in enumerate((self.tmax, self.tmedia, self.tmin)):
             datos.addWidget(t, 0, i)
         v.addLayout(datos)
@@ -98,8 +99,8 @@ class _Columna(QWidget):
                 # Que la maxima suba es lo que puede indicar un problema
                 color = theme.color("aviso") if (clave == "max" and d >= 1.0) else \
                     theme.color("texto_suave")
-                texto += ("&nbsp;<span style='font-size:13px; color:%s'>%+.1f °C</span>"
-                          % (color, d))
+                texto += ("&nbsp;<span style='font-size:13px; color:%s'>%s</span>"
+                          % (color, temp(d, signo=True)))
             tarjeta.set(texto)
 
 
@@ -126,13 +127,13 @@ class VistaComparacion(QWidget):
         v.setSpacing(10)
 
         barra = QHBoxLayout()
-        self.titulo = etiqueta("Comparación", "titulo")
+        self.titulo = etiqueta(tr("Comparación"), "titulo")
         self.lapso = etiqueta("", "suave")
         barra.addWidget(self.titulo)
         barra.addSpacing(12)
         barra.addWidget(self.lapso)
         barra.addStretch(1)
-        b = boton("Cerrar comparación", "mdi6.close", tooltip="Volver a ver una sola foto (Esc)")
+        b = boton(tr("Cerrar comparación"), "mdi6.close", tooltip=tr("Volver a ver una sola foto (Esc)"))
         b.clicked.connect(self.cerrar)
         barra.addWidget(b)
         v.addLayout(barra)
@@ -146,7 +147,7 @@ class VistaComparacion(QWidget):
         v.addLayout(fila, 1)
 
         # Mediciones con el mismo nombre en las dos fechas
-        self.titulo_tabla = etiqueta("MEDICIONES EN LAS DOS FECHAS", "seccion")
+        self.titulo_tabla = etiqueta(tr("MEDICIONES EN LAS DOS FECHAS"), "seccion")
         v.addWidget(self.titulo_tabla)
         self.tabla = QTableWidget(0, len(self.COLUMNAS))
         self.tabla.setHorizontalHeaderLabels(self.COLUMNAS)
@@ -157,7 +158,7 @@ class VistaComparacion(QWidget):
         enc.setSectionResizeMode(QHeaderView.Stretch)
         v.addWidget(self.tabla)
 
-    COLUMNAS = ("Medición", "Máxima antes", "Máxima ahora", "Cambio", "ΔT antes", "ΔT ahora")
+    COLUMNAS = (tr("Medición"), tr("Máxima antes"), tr("Máxima ahora"), tr("Cambio"), tr("ΔT antes"), tr("ΔT ahora"))
 
     @property
     def viewers(self):
@@ -179,7 +180,7 @@ class VistaComparacion(QWidget):
         # Si las dos estan en la misma carpeta, esa carpeta es el lugar
         carpetas = {i.path.parent for i in self.imagenes if i.path}
         carpeta = fecha_visible(carpetas.pop().name) if len(carpetas) == 1 else ""
-        self.titulo.setText("Comparación — %s" % carpeta if carpeta else "Comparación")
+        self.titulo.setText(tr("Comparación — %s") % carpeta if carpeta else tr("Comparación"))
         self.lapso.setText(_tiempo_entre(a, b))
 
     def _llenar_tabla(self, a, ma, b, mb):
@@ -196,12 +197,12 @@ class VistaComparacion(QWidget):
             def t(v, signo=False):
                 if v is None:
                     return "—"
-                return ("%+.1f °C" if signo else "%.1f °C") % v
+                return temp(v, signo=signo)
 
             def delta(r):
                 if r is None:
                     return "—"
-                return "referencia" if r.es_referencia else t(r.delta_t, True)
+                return tr("referencia") if r.es_referencia else t(r.delta_t, True)
             valores = (n, t(ra and ra.maxima), t(rb and rb.maxima), t(cambio, True),
                        delta(ra), delta(rb))
             for c, texto in enumerate(valores):
@@ -252,7 +253,7 @@ class DialogoElegirSegunda(QDialog):
 
     def __init__(self, biblioteca, actual, nombre_visible, parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Comparar con…")
+        self.setWindowTitle(tr("Comparar con…"))
         self.resize(760, 560)
         self.bib = biblioteca
         self.actual = Path(actual)
@@ -264,11 +265,11 @@ class DialogoElegirSegunda(QDialog):
         v = QVBoxLayout(self)
         v.setSpacing(10)
         f = _fecha_desde_nombre(self.actual.name)
-        v.addWidget(etiqueta("Elegí la foto para comparar con la del %s"
-                             % (f.strftime("%d/%m/%Y %H:%M") if f else self.actual.name), "titulo"))
+        v.addWidget(etiqueta(tr("Elegí la foto para comparar con la del %s")
+                             % (fecha_hora(f) if f else self.actual.name), "titulo"))
 
         fila = QHBoxLayout()
-        fila.addWidget(etiqueta("Carpeta", "suave"))
+        fila.addWidget(etiqueta(tr("Carpeta"), "suave"))
         self.combo = QComboBox()
         carpetas = biblioteca.todas_las_carpetas()
         for rel in carpetas:
@@ -288,13 +289,13 @@ class DialogoElegirSegunda(QDialog):
         self.galeria.itemDoubleClicked.connect(lambda *_: self._aceptar())
         self.galeria.itemSelectionChanged.connect(self._actualizar_boton)
         v.addWidget(self.galeria, 1)
-        self.vacia = etiqueta("No hay otras fotos en esta carpeta.", "suave")
+        self.vacia = etiqueta(tr("No hay otras fotos en esta carpeta."), "suave")
         v.addWidget(self.vacia)
 
         botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         self.btn_ok = botones.button(QDialogButtonBox.Ok)
-        self.btn_ok.setText("Comparar")
-        botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
+        self.btn_ok.setText(tr("Comparar"))
+        botones.button(QDialogButtonBox.Cancel).setText(tr("Cancelar"))
         botones.accepted.connect(self._aceptar)
         botones.rejected.connect(self.reject)
         v.addWidget(botones)
@@ -313,7 +314,7 @@ class DialogoElegirSegunda(QDialog):
         vacio.fill(QColor(theme.color("superficie")))
         for p in fotos:
             f = _fecha_desde_nombre(p.name)
-            it = QListWidgetItem(QIcon(vacio), f.strftime("%d/%m/%Y %H:%M") if f else p.stem)
+            it = QListWidgetItem(QIcon(vacio), fecha_hora(f) if f else p.stem)
             it.setData(Qt.UserRole, str(p))
             it.setToolTip(p.name)
             self.galeria.addItem(it)

@@ -4,6 +4,12 @@ App de escritorio para analizar, organizar y documentar las imágenes de la cám
 termográfica **UNI-T UTi760x**. Lee los datos radiométricos reales que la cámara guarda
 dentro de cada `.jpg` (640×512 temperaturas), no solo la imagen que se ve en pantalla.
 
+> **English:** desktop app to analyze, organize and report thermal images from the
+> **UNI-T UTi760x** camera, using the real per-pixel temperatures stored in each photo.
+> Wi-Fi import, measurements with ΔT vs. a reference, comparison over time, PDF reports.
+> Available in English, Spanish and Brazilian Portuguese — the installer asks for your
+> language. Download it from [Releases](https://github.com/androettojuan/uti760x-thermal-studio/releases/latest).
+
 ## Qué hace
 
 - **Importación por WiFi:** se conecta al FTP de la cámara y trae solo las fotos nuevas,
@@ -17,7 +23,9 @@ dentro de cada `.jpg` (640×512 temperaturas), no solo la imagen que se ve en pa
 - **Seguimiento en el tiempo:** comparación lado a lado de dos fechas con la misma escala
   y gráfico de evolución de cada lugar, siguiendo cada medición por su nombre.
 - **Informe PDF** con carátula, observaciones, resumen y una página por foto; exportación
-  a PNG y CSV (listo para Excel en castellano).
+  a PNG y CSV (listo para Excel).
+- **Idiomas:** español, inglés y portugués de Brasil. El instalador pregunta el idioma y
+  se cambia en *Ver → Idioma*. Números, fechas y CSV siguen el formato de cada idioma.
 
 ## Precisión
 

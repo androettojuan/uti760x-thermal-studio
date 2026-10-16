@@ -17,6 +17,7 @@ from ..core.library import fecha_visible
 from ..core.mediciones import AREA, LINEA, NOMBRES_TIPO, PUNTO, estadistica, resultados
 from ..core.thermal_image import posiciones_ecualizadas, tabla_colores
 from ..core.uti760x import TempConverter
+from ..i18n import fecha, fecha_hora, num, temp, tr
 
 COLOR_TRAZO = QColor("#ffffff")
 COLOR_SOMBRA = QColor(0, 0, 0, 190)
@@ -38,7 +39,7 @@ class Ajustes:
 
 @dataclass
 class DatosInforme:
-    titulo: str = "Informe termográfico"
+    titulo: str = tr("Informe termográfico")
     instalacion: str = ""
     inspector: str = ""
     fecha: date = field(default_factory=date.today)
@@ -106,7 +107,7 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
     mx = img.maximo()
     _triangulo(p, (mx.col + 0.5) * escala, (mx.fila + 0.5) * escala, 9 * escala, COLOR_MAX)
     _etiqueta(p, (mx.col + 0.5) * escala + 6 * escala, (mx.fila + 0.5) * escala,
-              "%.1f °C" % mx.temp, COLOR_MAX, limite)
+              temp(mx.temp), COLOR_MAX, limite)
 
     for m in mediciones.lista:
         e = estadistica(m, img.temps)
@@ -118,7 +119,7 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
             p.drawLine(QPointF(x - r, y), QPointF(x + r, y))
             p.drawLine(QPointF(x, y - r), QPointF(x, y + r))
             p.drawEllipse(QPointF(x, y), r * 0.55, r * 0.55)
-            _etiqueta(p, x + r, y - r * 0.3, "%s  %.1f °C" % (m.nombre, e.maxima), limite=limite)
+            _etiqueta(p, x + r, y - r * 0.3, "%s  %s" % (m.nombre, temp(e.maxima)), limite=limite)
             continue
         if m.tipo == LINEA:
             p.drawLine(QPointF(g[0], g[1]), QPointF(g[2], g[3]))
@@ -130,7 +131,7 @@ def imagen_anotada(img, mediciones, ajustes, escala=2, con_barra=True):
             ex, ey = x0, y0 - 2 * escala
         _triangulo(p, (e.col_max + 0.5) * escala, (e.fila_max + 0.5) * escala, 7 * escala,
                    COLOR_TRAZO)
-        _etiqueta(p, ex, ey, "%s  máx %.1f °C" % (m.nombre, e.maxima), limite=limite)
+        _etiqueta(p, ex, ey, tr("%s  máx %s") % (m.nombre, temp(e.maxima)), limite=limite)
 
     if con_barra:
         _barra(p, QRectF(base.width() + 12 * escala, 10 * escala, 18 * escala,
@@ -189,7 +190,7 @@ class _Pagina:
         self.texto(0, y, self.ancho_mm / 2,
                    d.titulo + (" — " + d.instalacion if d.instalacion else ""))
         self.texto(self.ancho_mm / 2, y, self.ancho_mm / 2,
-                   "Página %d de %d" % (self.n, self.total) if self.total else "",
+                   tr("Página %d de %d") % (self.n, self.total) if self.total else "",
                    alinear=Qt.AlignRight | Qt.AlignTop)
 
     def alto_texto(self, ancho, texto):
@@ -229,11 +230,11 @@ class _Pagina:
 
 
 def _fmt(v):
-    return "—" if v is None else "%.1f °C" % v
+    return temp(v)
 
 
 def _fmt_delta(v):
-    return "" if v is None else "%+.1f °C" % v
+    return "" if v is None else temp(v, signo=True)
 
 
 def _escritor(destino, titulo):
@@ -279,15 +280,15 @@ def generar_pdf(path, fotos, datos, ajustes, nombre_lugar=None):
 def _caratula(pg, fotos, datos, lugar):
     y = 20
     pg.fuente(9, True, ACENTO)
-    pg.texto(0, y, pg.ancho_mm, "INFORME TERMOGRÁFICO")
+    pg.texto(0, y, pg.ancho_mm, tr("INFORME TERMOGRÁFICO"))
     y += 7
     pg.fuente(22, True)
     y += pg.texto(0, y, pg.ancho_mm, datos.titulo, envolver=True) + 4
     pg.fuente(11)
-    for etiqueta_, valor in (("Instalación", datos.instalacion),
-                             ("Inspector", datos.inspector),
-                             ("Fecha del informe", datos.fecha.strftime("%d/%m/%Y")),
-                             ("Fotos", str(len(fotos)))):
+    for etiqueta_, valor in ((tr("Instalación"), datos.instalacion),
+                             (tr("Inspector"), datos.inspector),
+                             (tr("Fecha del informe"), fecha(datos.fecha)),
+                             (tr("Fotos"), str(len(fotos)))):
         if not valor:
             continue
         pg.fuente(10, color=GRIS)
@@ -301,7 +302,7 @@ def _caratula(pg, fotos, datos, lugar):
     obs = [par.strip() for par in datos.observaciones.strip().split("\n") if par.strip()]
     if obs:
         pg.fuente(9, True, ACENTO)
-        pg.texto(0, y, pg.ancho_mm, "OBSERVACIONES")
+        pg.texto(0, y, pg.ancho_mm, tr("OBSERVACIONES"))
         y += 7
         pg.fuente(10.5)
         for par in obs:
@@ -314,11 +315,11 @@ def _caratula(pg, fotos, datos, lugar):
         y += 6
 
     # Resumen: una fila por foto (puede seguir en la pagina siguiente)
-    cols = [(0, "Fecha"), (32, "Lugar"), (100, "Máxima"), (125, "Mayor ΔT"), (152, "Mediciones")]
+    cols = [(0, tr("Fecha")), (32, tr("Lugar")), (100, tr("Máxima")), (125, tr("Mayor ΔT")), (152, tr("Mediciones"))]
 
     def encabezado(y, sigue=False):
         pg.fuente(9, True, ACENTO)
-        pg.texto(0, y, pg.ancho_mm, "RESUMEN (continuación)" if sigue else "RESUMEN")
+        pg.texto(0, y, pg.ancho_mm, tr("RESUMEN (continuación)") if sigue else tr("RESUMEN"))
         y += 7
         pg.fuente(8.5, True, GRIS)
         for x, t in cols:
@@ -340,7 +341,7 @@ def _caratula(pg, fotos, datos, lugar):
         mayor = max(deltas, key=abs) if deltas else None
         f = img.meta.fecha
         pg.fuente(9.5)
-        pg.texto(cols[0][0], y, 32, f.strftime("%d/%m/%Y %H:%M") if f else "—")
+        pg.texto(cols[0][0], y, 32, fecha_hora(f) if f else "—")
         pg.texto(cols[1][0], y, 66, lugar(img.path) if img.path else "—")
         pg.texto(cols[2][0], y, 25, _fmt(img.maximo().temp))
         if mayor is not None and mayor >= 1.0:
@@ -351,10 +352,10 @@ def _caratula(pg, fotos, datos, lugar):
         y += 6
         pg.linea(0, y - 1.2, pg.ancho_mm)
     y += 6
-    nota = ("ΔT: máxima de cada medición menos la máxima de la medición de referencia de "
+    nota = (tr("ΔT: máxima de cada medición menos la máxima de la medición de referencia de "
             "la misma foto. Temperaturas calculadas por Thermal Studio a partir de los "
-            "datos radiométricos de la cámara: ±%.1f °C típico en el rango normal."
-            % TempConverter.ERROR_TIPICO_C)
+            "datos radiométricos de la cámara: ±%s típico en el rango normal.")
+            % temp(TempConverter.ERROR_TIPICO_C))
     pg.fuente(8, color=GRIS)
     if not pg.cabe(y, pg.alto_texto(pg.ancho_mm, nota)):
         pg.nueva_pagina()
@@ -367,7 +368,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     y = 0
     f = img.meta.fecha
     pg.fuente(18, True)
-    pg.texto(0, y, 120, f.strftime("%d/%m/%Y") if f else "Sin fecha")
+    pg.texto(0, y, 120, fecha(f) if f else tr("Sin fecha"))
     pg.fuente(12, color=GRIS)
     pg.texto(48, y + 2.2, 40, f.strftime("%H:%M") if f else "")
     pg.fuente(10, color=GRIS)
@@ -387,7 +388,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
         pg.imagen(ancho_t + 4, y, ancho_v, visible)
         pg.fuente(8, color=GRIS)
         pg.texto(ancho_t + 4, y + ancho_v * visible.height() / visible.width() + 1, ancho_v,
-                 "Foto visible")
+                 tr("Foto visible"))
     else:
         alto = pg.imagen(0, y, pg.ancho_mm * 0.8, termica)
     y += alto + 6
@@ -395,16 +396,16 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     # Datos generales
     mx, mn = img.maximo(), img.minimo()
     pg.fuente(9, True, ACENTO)
-    pg.texto(0, y, 80, "TEMPERATURAS")
-    pg.texto(95, y, 80, "PARÁMETROS DE CAPTURA")
+    pg.texto(0, y, 80, tr("TEMPERATURAS"))
+    pg.texto(95, y, 80, tr("PARÁMETROS DE CAPTURA"))
     y0 = y + 6
     m = img.meta
-    filas_izq = (("Máxima", _fmt(mx.temp)), ("Mínima", _fmt(mn.temp)),
-                 ("Centro", _fmt(img.centro().temp)))
-    filas_der = (("Emisividad", "%.2f" % m.emisividad if m.emisividad is not None else "—"),
-                 ("T. reflejada", _fmt(m.temp_reflejada)), ("Distancia",
-                  "%.1f m" % m.distancia_m if m.distancia_m is not None else "—"),
-                 ("Humedad", "%s %%" % m.humedad if m.humedad is not None else "—"))
+    filas_izq = ((tr("Máxima"), _fmt(mx.temp)), (tr("Mínima"), _fmt(mn.temp)),
+                 (tr("Centro"), _fmt(img.centro().temp)))
+    filas_der = ((tr("Emisividad"), num(m.emisividad, 2) if m.emisividad is not None else "—"),
+                 (tr("T. reflejada"), _fmt(m.temp_reflejada)), (tr("Distancia"),
+                  num(m.distancia_m) + " m" if m.distancia_m is not None else "—"),
+                 (tr("Humedad"), "%s %%" % m.humedad if m.humedad is not None else "—"))
     for i, (a, b) in enumerate(filas_izq):
         pg.fuente(9.5, color=GRIS)
         pg.texto(0, y0 + i * 5.2, 30, a)
@@ -421,10 +422,10 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     filas = resultados(ms, img.temps)
     if filas:
         pg.fuente(9, True, ACENTO)
-        pg.texto(0, y, 80, "MEDICIONES")
+        pg.texto(0, y, 80, tr("MEDICIONES"))
         y += 6
-        cols = [(0, "Medición"), (55, "Tipo"), (78, "Máxima"), (102, "Mínima"),
-                (126, "Media"), (150, "ΔT")]
+        cols = [(0, tr("Medición")), (55, tr("Tipo")), (78, tr("Máxima")), (102, tr("Mínima")),
+                (126, tr("Media")), (150, tr("ΔT"))]
         pg.fuente(8.5, True, GRIS)
         for x, t in cols:
             pg.texto(x, y, 40, t)
@@ -442,7 +443,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
             pg.texto(126, y, 24, _fmt(r.media))
             if r.es_referencia:
                 pg.fuente(9.5, color=GRIS)
-                pg.texto(150, y, 30, "referencia")
+                pg.texto(150, y, 30, tr("referencia"))
             else:
                 if r.delta_t is not None and r.delta_t >= 1.0:
                     pg.fuente(9.5, True, AVISO)
@@ -453,7 +454,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
 
     if ms.notas.strip():
         pg.fuente(9, True, ACENTO)
-        pg.texto(0, y, 80, "NOTAS")
+        pg.texto(0, y, 80, tr("NOTAS"))
         y += 6
         pg.fuente(10)
         pg.texto(0, y, pg.ancho_mm, ms.notas.strip(), alto=pg.alto_mm - 12 - y, envolver=True)
@@ -461,7 +462,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     if img.rango_alto or img.fuera_de_rango:
         pg.fuente(8, color=AVISO)
         pg.texto(0, pg.alto_mm - 14, pg.ancho_mm,
-                 "Atención: foto en el rango alto de la cámara, sin calibrar; las temperaturas "
-                 "no son confiables." if img.rango_alto else
-                 "Hay zonas fuera del rango calibrado (%d a %d °C): sus valores son aproximados."
+                 tr("Atención: foto en el rango alto de la cámara, sin calibrar; las temperaturas "
+                 "no son confiables.") if img.rango_alto else
+                 tr("Hay zonas fuera del rango calibrado (%d a %d °C): sus valores son aproximados.")
                  % TempConverter.RANGO_VALIDADO_C, envolver=True)

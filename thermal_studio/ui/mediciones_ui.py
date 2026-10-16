@@ -17,6 +17,7 @@ from ..core.mediciones import AREA, LINEA, PUNTO, Mediciones, estadistica, perfi
 from . import theme
 from .viewer import MarcasSinClic
 from .widgets import boton, etiqueta
+from ..i18n import num, temp, tr
 
 COLOR_MEDICION = "#ffffff"
 COLOR_SOMBRA = (0, 0, 0, 170)
@@ -24,7 +25,7 @@ TAM_MINIMO = 2.0  # en pixeles de imagen: menos que esto es un clic, no un arras
 
 
 def _fmt(t):
-    return "—" if t is None else "%.1f" % t
+    return num(t)
 
 
 def _fmt_delta(d):
@@ -125,10 +126,10 @@ class CapaMediciones(QObject):
                 continue
             e = estadistica(m, img.temps)
             if m.tipo == PUNTO:
-                texto.setText("%s  %.1f °C" % (m.nombre, e.maxima))
+                texto.setText("%s  %s" % (m.nombre, temp(e.maxima)))
                 texto.setPos(m.geom[0] + 6, m.geom[1] - 6)
             else:
-                texto.setText("%s  máx %.1f °C" % (m.nombre, e.maxima))
+                texto.setText(tr("%s  máx %s") % (m.nombre, temp(e.maxima)))
                 puntos.append({"pos": (e.col_max + 0.5, e.fila_max + 0.5)})
                 if m.tipo == LINEA:
                     texto.setPos(m.geom[2] + 6, m.geom[3] - 6)
@@ -297,7 +298,7 @@ class PanelMediciones(QWidget):
     borrar = Signal(str)
     referenciaCambiada = Signal()
 
-    COLUMNAS = ("Nombre", "Máx", "Mín", "Media", "ΔT")
+    COLUMNAS = (tr("Nombre"), tr("Máx"), tr("Mín"), tr("Media"), tr("ΔT"))
 
     def __init__(self):
         super().__init__()
@@ -310,20 +311,20 @@ class PanelMediciones(QWidget):
         v.setSpacing(8)
 
         cab = QHBoxLayout()
-        cab.addWidget(etiqueta("MEDICIONES", "seccion"))
+        cab.addWidget(etiqueta(tr("MEDICIONES"), "seccion"))
         cab.addStretch(1)
-        self.btn_ref = boton("Referencia", "mdi6.star-outline",
-                             tooltip="Usar la medición elegida como referencia del ΔT")
+        self.btn_ref = boton(tr("Referencia"), "mdi6.star-outline",
+                             tooltip=tr("Usar la medición elegida como referencia del ΔT"))
         self.btn_ref.clicked.connect(self._alternar_referencia)
-        self.btn_borrar = boton("", "mdi6.delete-outline", tooltip="Borrar la medición (Supr)")
+        self.btn_borrar = boton("", "mdi6.delete-outline", tooltip=tr("Borrar la medición (Supr)"))
         self.btn_borrar.clicked.connect(lambda: self.borrar.emit(self._nombre_elegido()))
         cab.addWidget(self.btn_ref)
         cab.addWidget(self.btn_borrar)
         v.addLayout(cab)
 
-        self.ayuda = etiqueta("Usá las herramientas de la barra para medir: punto (P), "
+        self.ayuda = etiqueta(tr("Usá las herramientas de la barra para medir: punto (P), "
                               "línea (L) o área (R). ΔT es la máxima de cada medición "
-                              "menos la de la referencia (★).", "suave")
+                              "menos la de la referencia (★)."), "suave")
         self.ayuda.setWordWrap(True)
         v.addWidget(self.ayuda)
 
@@ -350,7 +351,7 @@ class PanelMediciones(QWidget):
         self.grafico.setMenuEnabled(False)
         self.grafico.setMouseEnabled(False, False)
         self.grafico.setLabel("left", "°C")
-        self.grafico.setLabel("bottom", "píxeles")
+        self.grafico.setLabel("bottom", tr("píxeles"))
         self.curva = self.grafico.plot([], [])
         v.addWidget(self.grafico)
         theme.al_cambiar(self._aplicar_tema)
@@ -373,11 +374,11 @@ class PanelMediciones(QWidget):
             es_ref = m.nombre == self.mediciones.referencia
             nombre = QTableWidgetItem(m.nombre)
             nombre.setData(Qt.UserRole, m.nombre)
-            nombre.setToolTip("Doble clic para cambiar el nombre")
+            nombre.setToolTip(tr("Doble clic para cambiar el nombre"))
             if es_ref:
                 nombre.setText("★ " + m.nombre)
             valores = (_fmt(e and e.maxima), _fmt(e and e.minima), _fmt(e and e.media),
-                       "ref." if es_ref else _fmt_delta(d))
+                       tr("ref.") if es_ref else _fmt_delta(d))
             self.tabla.setItem(fila, 0, nombre)
             for col, texto in enumerate(valores, start=1):
                 it = QTableWidgetItem(texto)
@@ -438,12 +439,12 @@ class PanelMediciones(QWidget):
             return
         m = QMenu(self)
         es_ref = self.mediciones.referencia == nombre
-        m.addAction("Quitar como referencia" if es_ref else "Usar como referencia del ΔT",
+        m.addAction(tr("Quitar como referencia") if es_ref else tr("Usar como referencia del ΔT"),
                     self._alternar_referencia)
-        m.addAction("Cambiar nombre", lambda: self.tabla.editItem(
+        m.addAction(tr("Cambiar nombre"), lambda: self.tabla.editItem(
             self.tabla.item(self.tabla.currentRow(), 0)))
         m.addSeparator()
-        m.addAction("Borrar", lambda: self.borrar.emit(nombre))
+        m.addAction(tr("Borrar"), lambda: self.borrar.emit(nombre))
         m.exec(self.tabla.viewport().mapToGlobal(pos))
 
     def _actualizar_botones(self):
@@ -470,7 +471,7 @@ class PanelMediciones(QWidget):
             return
         dist, valores = perfil(m, self.temps)
         self.curva.setData(dist, valores)
-        self.titulo_perfil.setText("Perfil de %s" % m.nombre)
+        self.titulo_perfil.setText(tr("Perfil de %s") % m.nombre)
         self.titulo_perfil.show()
         self.grafico.show()
 

@@ -9,7 +9,13 @@ def main():
     from PySide6.QtGui import QIcon
     from PySide6.QtWidgets import QApplication
 
-    from . import __version__
+    from . import __version__, i18n
+
+    # El idioma va antes de importar la interfaz: algunos textos se arman al
+    # importar los modulos. Lo guarda el instalador (o Ver > Idioma).
+    elegido = QSettings("ThermalStudio", "ThermalStudio").value("idioma")
+    i18n.set_idioma(elegido or i18n.idioma_del_sistema())
+
     from .ui import theme
     from .ui.main_window import APP_NOMBRE, MainWindow
 

@@ -13,6 +13,7 @@ import base64
 import json
 import struct
 from pathlib import Path
+from ..i18n import tr
 
 import numpy as np
 
@@ -101,19 +102,19 @@ class Uti760xFile:
     def _extract_json(self):
         b = self.file_bytes
         if len(b) < FOOTER_SIZE:
-            raise FormatoInvalido("Archivo demasiado corto")
+            raise FormatoInvalido(tr("Archivo demasiado corto"))
         foot = b[-FOOTER_SIZE:]
         json_len = struct.unpack("<I", foot[:4])[0]
         self.model = foot[4:].rstrip(b"\x00").decode("latin-1")
         if not self.model.lower().startswith("uti"):
-            raise FormatoInvalido("No es una imagen radiometrica de UNI-T")
+            raise FormatoInvalido(tr("No es una imagen radiometrica de UNI-T"))
         start = len(b) - FOOTER_SIZE - json_len
         if start < 0:
-            raise FormatoInvalido("Bloque de datos truncado")
+            raise FormatoInvalido(tr("Bloque de datos truncado"))
         try:
             return json.loads(b[start:start + json_len].decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as e:
-            raise FormatoInvalido("Bloque de datos corrupto: %s" % e) from e
+            raise FormatoInvalido(tr("Bloque de datos corrupto: %s") % e) from e
 
     def _b64(self, key):
         v = self.save_image.get(key)
@@ -123,7 +124,7 @@ class Uti760xFile:
         """Array (512, 640) uint16. Fila 0 = arriba."""
         d = self._b64("tempData")
         if d is None:
-            raise FormatoInvalido("La imagen no tiene datos de temperatura")
+            raise FormatoInvalido(tr("La imagen no tiene datos de temperatura"))
         if len(d) != IR_W * IR_H * 2:
             raise FormatoInvalido("tempData tiene %d bytes, se esperaban %d"
                                   % (len(d), IR_W * IR_H * 2))

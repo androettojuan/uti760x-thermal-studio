@@ -7,10 +7,11 @@ from PySide6.QtWidgets import QDialog, QDialogButtonBox, QTextBrowser, QVBoxLayo
 from .. import __version__
 from ..core.uti760x import TempConverter
 from . import theme
+from ..i18n import temp, tr
 
 REPO = "https://github.com/androettojuan/uti760x-thermal-studio"
 
-GUIA = """
+GUIA = tr("""
 <h2>Guía rápida</h2>
 
 <h3>1. Traer las fotos de la cámara</h3>
@@ -77,10 +78,10 @@ temperaturas (CSV para Excel).</li>
 </table>
 
 <h3>Precisión</h3>
-<p>Las temperaturas se calculan con los datos radiométricos de cada foto: ±%(tipico).1f °C
+<p>Las temperaturas se calculan con los datos radiométricos de cada foto: ±%(tipico)s
 típico entre %(lo)d y %(hi)d °C, comparado con lo que muestra la cámara. Las fotos sacadas
 en el rango alto de la cámara todavía no están calibradas y lo avisan.</p>
-"""
+""")
 
 
 def _licencia():
@@ -92,7 +93,7 @@ def _licencia():
             return p.read_text(encoding="utf-8")
         except OSError:
             continue
-    return "MIT License — Copyright (c) 2026 Juan Manuel Androetto. Ver %s" % REPO
+    return tr("MIT License — Copyright (c) 2026 Juan Manuel Androetto. Ver %s") % REPO
 
 
 def _dialogo(parent, titulo, html, ancho=640, alto=640):
@@ -107,7 +108,7 @@ def _dialogo(parent, titulo, html, ancho=640, alto=640):
               % (acento, acento, html))
     v.addWidget(t)
     b = QDialogButtonBox(QDialogButtonBox.Close)
-    b.button(QDialogButtonBox.Close).setText("Cerrar")
+    b.button(QDialogButtonBox.Close).setText(tr("Cerrar"))
     b.rejected.connect(d.reject)
     v.addWidget(b)
     return d
@@ -115,18 +116,18 @@ def _dialogo(parent, titulo, html, ancho=640, alto=640):
 
 def mostrar_guia(parent):
     lo, hi = TempConverter.RANGO_VALIDADO_C
-    _dialogo(parent, "Guía rápida", GUIA % {"tipico": TempConverter.ERROR_TIPICO_C,
+    _dialogo(parent, tr("Guía rápida"), GUIA % {"tipico": temp(TempConverter.ERROR_TIPICO_C),
                                              "lo": lo, "hi": hi}).exec()
 
 
 def mostrar_acerca_de(parent):
     lic = _licencia().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-    html = """
+    html = tr("""
 <h2>Thermal Studio %(v)s</h2>
 <p>Análisis de imágenes termográficas de la cámara UNI-T UTi760x: importación por WiFi,
 mediciones, comparación en el tiempo e informes.</p>
 <p>Juan Manuel Androetto · <a href="%(repo)s">%(repo)s</a></p>
 <h3>Licencia</h3>
 <pre style="font-size:11px; white-space:pre-wrap">%(lic)s</pre>
-""" % {"v": __version__, "repo": REPO, "lic": lic}
-    _dialogo(parent, "Acerca de Thermal Studio", html, 600, 560).exec()
+""") % {"v": __version__, "repo": REPO, "lic": lic}
+    _dialogo(parent, tr("Acerca de Thermal Studio"), html, 600, 560).exec()

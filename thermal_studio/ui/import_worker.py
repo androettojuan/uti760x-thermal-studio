@@ -11,6 +11,7 @@ from PySide6.QtCore import QThread, Signal
 
 from ..core import importer
 from ..core.camera_ftp import CameraFTP, Cancelado, ErrorCamara
+from ..i18n import tr
 
 
 class HiloPlan(QThread):
@@ -30,7 +31,7 @@ class HiloPlan(QThread):
         except ErrorCamara as e:
             self.error.emit(str(e))
         except OSError as e:
-            self.error.emit("Error al preparar la importación: %s" % e)
+            self.error.emit(tr("Error al preparar la importación: %s") % e)
 
 
 class HiloDescarga(QThread):
@@ -71,5 +72,5 @@ class HiloDescarga(QThread):
         except ErrorCamara as e:
             error = str(e)
         except OSError as e:
-            error = "Error al guardar las fotos: %s" % e
+            error = tr("Error al guardar las fotos: %s") % e
         self.terminado.emit(self._hechas, cancelado, error)

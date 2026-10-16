@@ -11,6 +11,7 @@ import ftplib
 import socket
 from dataclasses import dataclass
 from pathlib import Path
+from ..i18n import tr
 
 HOST = "192.168.32.1"
 PUERTO = 2121
@@ -73,14 +74,14 @@ class CameraFTP:
             ftp.connect(self.host, self.puerto)
         except (OSError, socket.timeout) as e:
             raise ErrorCamara(
-                "No se encontró la cámara en %s:%d.\n\nRevisá que la PC esté conectada al "
-                "WiFi de la cámara y que el FTP esté activado en la cámara." % (self.host, self.puerto)
+                tr("No se encontró la cámara en %s:%d.\n\nRevisá que la PC esté conectada al "
+                "WiFi de la cámara y que el FTP esté activado en la cámara.") % (self.host, self.puerto)
             ) from e
         try:
             ftp.login(self.usuario, self.clave)
         except ftplib.error_perm as e:
             ftp.close()
-            raise ErrorCamara("La cámara rechazó el usuario o la contraseña del FTP.") from e
+            raise ErrorCamara(tr("La cámara rechazó el usuario o la contraseña del FTP.")) from e
         ftp.voidcmd("TYPE I")
         self.ftp = ftp
 
@@ -98,7 +99,7 @@ class CameraFTP:
         try:
             self.ftp.retrlines("LIST %s" % CARPETA_FOTOS, lineas.append)
         except (OSError, ftplib.Error) as e:
-            raise ErrorCamara("No se pudo leer la lista de fotos de la cámara: %s" % e) from e
+            raise ErrorCamara(tr("No se pudo leer la lista de fotos de la cámara: %s") % e) from e
         archivos = (_parsear_list(l) for l in lineas)
         return sorted((a for a in archivos if a and a.nombre.lower().endswith(".jpg")),
                       key=lambda a: a.nombre)
@@ -128,7 +129,7 @@ class CameraFTP:
                 self.ftp.retrbinary("RETR %s/%s" % (CARPETA_FOTOS, archivo.nombre),
                                     bloque, blocksize=64 * 1024)
             if recibido != archivo.tamano:
-                raise ErrorCamara("La descarga de %s quedó incompleta (%d de %d bytes)."
+                raise ErrorCamara(tr("La descarga de %s quedó incompleta (%d de %d bytes).")
                                   % (archivo.nombre, recibido, archivo.tamano))
             parcial.replace(destino)
         except Cancelado:
@@ -139,7 +140,7 @@ class CameraFTP:
             raise
         except (OSError, ftplib.Error) as e:
             parcial.unlink(missing_ok=True)
-            raise ErrorCamara("Falló la descarga de %s: %s" % (archivo.nombre, e)) from e
+            raise ErrorCamara(tr("Falló la descarga de %s: %s") % (archivo.nombre, e)) from e
         except BaseException:
             parcial.unlink(missing_ok=True)
             raise

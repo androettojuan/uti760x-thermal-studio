@@ -64,8 +64,17 @@ jobs:
           name: Thermal Studio ${{ steps.version.outputs.version }}
           files: dist/ThermalStudio-*-instalador.exe
           body: |
-            Descargá **ThermalStudio-${{ steps.version.outputs.version }}-instalador.exe** y ejecutalo.
+            **Español** — Descargá **ThermalStudio-${{ steps.version.outputs.version }}-instalador.exe** y ejecutalo; el instalador pregunta el idioma.
             Se instala sin permisos de administrador. Requiere Windows 10/11 de 64 bits.
-
             Windows puede mostrar «Windows protegió su PC» porque el instalador no está firmado:
             hacé clic en «Más información» → «Ejecutar de todas formas».
+
+            **English** — Download **ThermalStudio-${{ steps.version.outputs.version }}-instalador.exe** and run it; the installer asks for your language.
+            No administrator rights needed. Requires 64-bit Windows 10/11.
+            Windows may show "Windows protected your PC" because the installer is not signed:
+            click "More info" → "Run anyway".
+
+            **Português** — Baixe **ThermalStudio-${{ steps.version.outputs.version }}-instalador.exe** e execute; o instalador pergunta o idioma.
+            Instala sem permissões de administrador. Requer Windows 10/11 de 64 bits.
+            O Windows pode mostrar “O Windows protegeu o computador” porque o instalador não é assinado:
+            clique em “Mais informações” → “Executar assim mesmo”.

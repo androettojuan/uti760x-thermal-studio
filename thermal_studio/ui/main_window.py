@@ -23,6 +23,8 @@ from .informe import Ajustes, generar_pdf, imagen_anotada
 from .mediciones_ui import CapaMediciones, PanelMediciones
 from .library_panel import LibraryPanel
 from .viewer import CONTRASTE_CAMARA, CONTRASTE_LINEAL, ThermalViewer, fmt_temp
+from .. import i18n
+from ..i18n import fecha_hora, formato_fecha, num, temp, tr
 from .widgets import (
     TarjetaDato, boton, boton_icono, etiqueta, marco, pixmap_redondeado, separador,
     swatch_paleta,
@@ -46,7 +48,7 @@ class MiniaturaVisible(QLabel):
         super().__init__()
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
-        self.setToolTip("Foto visible tomada por la cámara. Clic para verla en grande (V)")
+        self.setToolTip(tr("Foto visible tomada por la cámara. Clic para verla en grande (V)"))
         self.setMinimumWidth(1)  # que no impida achicar el panel
         self._original = None
 
@@ -111,7 +113,7 @@ class VentanaVisible(QDialog):
         self.resize(1000, 780)
 
     def mostrar(self, pix, titulo):
-        self.setWindowTitle("Foto visible — %s" % titulo)
+        self.setWindowTitle(tr("Foto visible — %s") % titulo)
         self.foto.set_foto(pix)
 
 
@@ -128,9 +130,9 @@ class PanelInfo(QScrollArea):
         lay.setContentsMargins(16, 16, 16, 16)
         lay.setSpacing(12)
 
-        self.archivo = etiqueta("Sin imagen", "titulo")
+        self.archivo = etiqueta(tr("Sin imagen"), "titulo")
         self.archivo.setWordWrap(True)
-        self.fecha = etiqueta("Elegí una foto de la biblioteca", "suave")
+        self.fecha = etiqueta(tr("Elegí una foto de la biblioteca"), "suave")
         lay.addWidget(self.archivo)
         lay.addWidget(self.fecha)
 
@@ -139,9 +141,9 @@ class PanelInfo(QScrollArea):
         cv = QVBoxLayout(cursor)
         cv.setContentsMargins(14, 12, 14, 12)
         cv.setSpacing(0)
-        cv.addWidget(etiqueta("BAJO EL CURSOR", "seccion"))
+        cv.addWidget(etiqueta(tr("BAJO EL CURSOR"), "seccion"))
         self.cursor = etiqueta("—", "grande")
-        self.coords = etiqueta("Pasá el mouse por la imagen", "suave")
+        self.coords = etiqueta(tr("Pasá el mouse por la imagen"), "suave")
         cv.addWidget(self.cursor)
         cv.addWidget(self.coords)
         lay.addWidget(cursor)
@@ -149,11 +151,11 @@ class PanelInfo(QScrollArea):
         # Estadisticas
         grid = QGridLayout()
         grid.setSpacing(8)
-        self.tmax = TarjetaDato("Máxima", "max")
-        self.tmin = TarjetaDato("Mínima", "min")
-        self.tcentro = TarjetaDato("Centro")
-        self.tmedia = TarjetaDato("Media")
-        self.delta = TarjetaDato("Diferencia máx − mín (ΔT)", "acento")
+        self.tmax = TarjetaDato(tr("Máxima"), "max")
+        self.tmin = TarjetaDato(tr("Mínima"), "min")
+        self.tcentro = TarjetaDato(tr("Centro"))
+        self.tmedia = TarjetaDato(tr("Media"))
+        self.delta = TarjetaDato(tr("Diferencia máx − mín (ΔT)"), "acento")
         grid.addWidget(self.tmax, 0, 0)
         grid.addWidget(self.tmin, 0, 1)
         grid.addWidget(self.tcentro, 1, 0)
@@ -166,16 +168,16 @@ class PanelInfo(QScrollArea):
         self.mediciones = PanelMediciones()
         lay.addWidget(self.mediciones)
 
-        lay.addWidget(etiqueta("NOTAS", "seccion"))
+        lay.addWidget(etiqueta(tr("NOTAS"), "seccion"))
         self.notas = QPlainTextEdit()
-        self.notas.setPlaceholderText("Observaciones sobre esta foto. Se guardan solas y "
-                                      "salen en el informe.")
+        self.notas.setPlaceholderText(tr("Observaciones sobre esta foto. Se guardan solas y "
+                                      "salen en el informe."))
         self.notas.setFixedHeight(90)
         lay.addWidget(self.notas)
 
         # Parametros
         lay.addSpacing(4)
-        lay.addWidget(etiqueta("PARÁMETROS DE CAPTURA", "seccion"))
+        lay.addWidget(etiqueta(tr("PARÁMETROS DE CAPTURA"), "seccion"))
         form = QFormLayout()
         form.setHorizontalSpacing(16)
         form.setVerticalSpacing(6)
@@ -186,17 +188,17 @@ class PanelInfo(QScrollArea):
             v.setTextInteractionFlags(Qt.TextSelectableByMouse)
             form.addRow(etiqueta(titulo, "suave"), v)
             return v
-        self.ems = fila("Emisividad")
-        self.trefl = fila("T. reflejada")
-        self.tamb = fila("T. ambiente")
-        self.hum = fila("Humedad")
-        self.dist = fila("Distancia")
+        self.ems = fila(tr("Emisividad"))
+        self.trefl = fila(tr("T. reflejada"))
+        self.tamb = fila(tr("T. ambiente"))
+        self.hum = fila(tr("Humedad"))
+        self.dist = fila(tr("Distancia"))
 
         self.aviso = etiqueta("", "suave")
         self.aviso.setWordWrap(True)
         lay.addWidget(self.aviso)
 
-        self.titulo_visible = etiqueta("FOTO VISIBLE", "seccion")
+        self.titulo_visible = etiqueta(tr("FOTO VISIBLE"), "seccion")
         self.visible = MiniaturaVisible()
         lay.addWidget(self.titulo_visible)
         lay.addWidget(self.visible)
@@ -210,14 +212,14 @@ class PanelInfo(QScrollArea):
         self._img = img
         m = img.meta
         self.archivo.setText(img.path.name if img.path else "—")
-        self.fecha.setText(m.fecha.strftime("%d/%m/%Y  %H:%M:%S") if m.fecha else "Sin fecha")
+        self.fecha.setText(fecha_hora(m.fecha, segundos=True) if m.fecha else tr("Sin fecha"))
         mx, mn = img.maximo(), img.minimo()
         self.tmax.set(fmt_temp(mx.temp))
         self.tmin.set(fmt_temp(mn.temp))
         self.tcentro.set(fmt_temp(img.centro().temp))
         self.tmedia.set(fmt_temp(img.media()))
-        self.delta.set("%.1f °C" % (mx.temp - mn.temp))
-        self.ems.setText(_fmt(m.emisividad))
+        self.delta.set(temp(mx.temp - mn.temp))
+        self.ems.setText(num(m.emisividad, 2))
         self.trefl.setText(_fmt(m.temp_reflejada, " °C"))
         self.tamb.setText(_fmt(m.temp_ambiente, " °C"))
         self.hum.setText(_fmt(m.humedad, " %"))
@@ -235,22 +237,22 @@ class PanelInfo(QScrollArea):
             self.titulo_visible.hide()
 
     def _pintar_aviso(self, img):
-        aviso = "Precisión de la conversión a grados: ±%.1f °C típico." % img.incertidumbre_c
+        aviso = tr("Precisión de la conversión a grados: ±%s típico.") % temp(img.incertidumbre_c)
         if img.rango_alto:
-            aviso = ("<b style='color:%s'>⚠ Rango alto sin calibrar</b><br>La foto se sacó en el "
+            aviso = (tr("<b style='color:%s'>⚠ Rango alto sin calibrar</b><br>La foto se sacó en el "
                      "rango de temperatura alto de la cámara, que el programa todavía no sabe "
-                     "convertir. Las temperaturas que ves no son confiables."
+                     "convertir. Las temperaturas que ves no son confiables.")
                      % theme.color("aviso"))
         elif img.fuera_de_rango:
             lo, hi = TempConverter.RANGO_VALIDADO_C
-            aviso = ("<b style='color:%s'>⚠ Fuera del rango calibrado</b><br>La imagen tiene "
+            aviso = (tr("<b style='color:%s'>⚠ Fuera del rango calibrado</b><br>La imagen tiene "
                      "temperaturas fuera de %d a %d °C; los valores extremos son aproximados."
-                     "<br><br>%s" % (theme.color("aviso"), lo, hi, aviso))
+                     "<br><br>%s") % (theme.color("aviso"), lo, hi, aviso))
         self.aviso.setText(aviso)
 
     def set_cursor(self, fila, col, temp):
         self.cursor.setText(fmt_temp(temp))
-        self.coords.setText("Pasá el mouse por la imagen" if temp is None
+        self.coords.setText(tr("Pasá el mouse por la imagen") if temp is None
                             else "x %d · y %d" % (col, fila))
 
 
@@ -266,10 +268,10 @@ class AreaVisor(QStackedWidget):
         theme.al_cambiar(lambda: icono.setPixmap(
             theme.icono("mdi6.thermometer-lines", "texto_suave").pixmap(QSize(64, 64))))
         v.addWidget(icono)
-        t = etiqueta("Elegí una foto de la biblioteca", "titulo")
+        t = etiqueta(tr("Elegí una foto de la biblioteca"), "titulo")
         t.setAlignment(Qt.AlignCenter)
         v.addWidget(t)
-        s = etiqueta("o traé las nuevas desde la cámara con «Traer faltantes»", "suave")
+        s = etiqueta(tr("o traé las nuevas desde la cámara con «Traer faltantes»"), "suave")
         s.setAlignment(Qt.AlignCenter)
         v.addWidget(s)
         theme.al_cambiar(lambda: vacio.setStyleSheet(
@@ -301,7 +303,7 @@ class DialogoCamara(QDialog):
 
     def __init__(self, conexion, red_wifi="", parent=None):
         super().__init__(parent)
-        self.setWindowTitle("Conexión con la cámara")
+        self.setWindowTitle(tr("Conexión con la cámara"))
         self.setMinimumWidth(380)
         form = QFormLayout(self)
         form.setContentsMargins(18, 18, 18, 18)
@@ -314,22 +316,22 @@ class DialogoCamara(QDialog):
         self.clave = QLineEdit(conexion["clave"])
         self.clave.setEchoMode(QLineEdit.Password)
         self.red = QLineEdit(red_wifi)
-        self.red.setPlaceholderText("Se detecta sola al conectarse la primera vez")
-        intro = etiqueta("Conectá la PC al WiFi de la cámara y activá el FTP en la cámara.",
+        self.red.setPlaceholderText(tr("Se detecta sola al conectarse la primera vez"))
+        intro = etiqueta(tr("Conectá la PC al WiFi de la cámara y activá el FTP en la cámara."),
                          "suave")
         intro.setWordWrap(True)
         form.addRow(intro)
-        form.addRow("Red WiFi", self.red)
-        form.addRow("Dirección", self.host)
-        form.addRow("Puerto", self.puerto)
-        form.addRow("Usuario", self.usuario)
-        form.addRow("Contraseña", self.clave)
+        form.addRow(tr("Red WiFi"), self.red)
+        form.addRow(tr("Dirección"), self.host)
+        form.addRow(tr("Puerto"), self.puerto)
+        form.addRow(tr("Usuario"), self.usuario)
+        form.addRow(tr("Contraseña"), self.clave)
         botones = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel
                                    | QDialogButtonBox.RestoreDefaults)
-        botones.button(QDialogButtonBox.Ok).setText("Guardar")
+        botones.button(QDialogButtonBox.Ok).setText(tr("Guardar"))
         botones.button(QDialogButtonBox.Ok).setProperty("variante", "primario")
-        botones.button(QDialogButtonBox.Cancel).setText("Cancelar")
-        botones.button(QDialogButtonBox.RestoreDefaults).setText("Valores de fábrica")
+        botones.button(QDialogButtonBox.Cancel).setText(tr("Cancelar"))
+        botones.button(QDialogButtonBox.RestoreDefaults).setText(tr("Valores de fábrica"))
         botones.accepted.connect(self.accept)
         botones.rejected.connect(self.reject)
         botones.button(QDialogButtonBox.RestoreDefaults).clicked.connect(self._defaults)
@@ -412,37 +414,37 @@ class MainWindow(QMainWindow):
 
         self._crear_menu()
         self._conectar_mediciones()
-        self.statusBar().showMessage("Listo")
+        self.statusBar().showMessage(tr("Listo"))
 
     # -- menu --------------------------------------------------------------
     def _crear_menu(self):
         mb = self.menuBar()
-        m = mb.addMenu("&Archivo")
-        self.act_abrir = m.addAction("Abrir imagen…", self.dialogo_abrir)
+        m = mb.addMenu(tr("&Archivo"))
+        self.act_abrir = m.addAction(tr("Abrir imagen…"), self.dialogo_abrir)
         self.act_abrir.setShortcut(QKeySequence.Open)
-        m.addAction("Cambiar carpeta de la biblioteca…", self.cambiar_biblioteca)
-        m.addAction("Mostrar biblioteca en el Explorador",
+        m.addAction(tr("Cambiar carpeta de la biblioteca…"), self.cambiar_biblioteca)
+        m.addAction(tr("Mostrar biblioteca en el Explorador"),
                     lambda: sistema.mostrar_en_explorador(self.biblioteca.raiz))
         m.addSeparator()
-        m.addAction("Crear informe PDF…", self.crear_informe).setShortcut(QKeySequence.Print)
-        m.addAction("Exportar imagen con mediciones (PNG)…", self.exportar_png)
-        m.addAction("Exportar mediciones (CSV)…", self.exportar_csv_mediciones)
-        m.addAction("Exportar todas las temperaturas (CSV)…", self.exportar_csv_temperaturas)
+        m.addAction(tr("Crear informe PDF…"), self.crear_informe).setShortcut(QKeySequence.Print)
+        m.addAction(tr("Exportar imagen con mediciones (PNG)…"), self.exportar_png)
+        m.addAction(tr("Exportar mediciones (CSV)…"), self.exportar_csv_mediciones)
+        m.addAction(tr("Exportar todas las temperaturas (CSV)…"), self.exportar_csv_temperaturas)
         m.addSeparator()
-        m.addAction("Salir", self.close).setShortcut(QKeySequence.Quit)
+        m.addAction(tr("Salir"), self.close).setShortcut(QKeySequence.Quit)
 
-        m = mb.addMenu("&Cámara")
-        self.act_importar = m.addAction("Traer fotos faltantes",
+        m = mb.addMenu(tr("&Cámara"))
+        self.act_importar = m.addAction(tr("Traer fotos faltantes"),
                                         lambda: self.importar(Modo.FALTANTES))
         self.act_importar.setShortcut("Ctrl+I")
-        m.addAction("Traer todas las fotos", lambda: self.importar(Modo.TODO))
+        m.addAction(tr("Traer todas las fotos"), lambda: self.importar(Modo.TODO))
         m.addSeparator()
-        m.addAction("Configurar conexión…", self.configurar_camara)
+        m.addAction(tr("Configurar conexión…"), self.configurar_camara)
 
-        m = mb.addMenu("&Ver")
+        m = mb.addMenu(tr("&Ver"))
         for texto, w, atajo, btn, clave in (
-                ("Biblioteca", self.panel_bib, "Ctrl+1", self.btn_panel_bib, "ver/biblioteca"),
-                ("Datos", self.panel, "Ctrl+2", self.btn_panel_datos, "ver/datos")):
+                (tr("Biblioteca"), self.panel_bib, "Ctrl+1", self.btn_panel_bib, "ver/biblioteca"),
+                (tr("Datos"), self.panel, "Ctrl+2", self.btn_panel_datos, "ver/datos")):
             a = m.addAction(texto)
             a.setCheckable(True)
             a.setShortcut(atajo)
@@ -457,30 +459,38 @@ class MainWindow(QMainWindow):
             a.setChecked(visible)
             alternar(visible)
         m.addSeparator()
-        self.act_visible = m.addAction("Foto visible en grande", self.ver_visible)
+        self.act_visible = m.addAction(tr("Foto visible en grande"), self.ver_visible)
         self.act_visible.setShortcut("V")
-        a = m.addAction("Suavizar la imagen térmica")
+        a = m.addAction(tr("Suavizar la imagen térmica"))
         a.setCheckable(True)
-        a.setToolTip("Interpola al ampliar, como la pantalla de la cámara. No agrega detalle: "
-                     "el sensor es de 640×512")
+        a.setToolTip(tr("Interpola al ampliar, como la pantalla de la cámara. No agrega detalle: "
+                     "el sensor es de 640×512"))
         a.setChecked(self.settings.value("suavizar", True, type=bool))
         a.toggled.connect(self._suavizado_cambiado)
         for v in self._visores():
             v.set_suavizado(a.isChecked())
         m.addSeparator()
-        self.act_comparar = m.addAction("Comparar con otra foto…", self.comparar_seleccionadas)
+        self.act_comparar = m.addAction(tr("Comparar con otra foto…"), self.comparar_seleccionadas)
         self.act_comparar.setShortcut("C")
-        a = m.addAction("Evolución de la carpeta", lambda: self.ver_evolucion(
+        a = m.addAction(tr("Evolución de la carpeta"), lambda: self.ver_evolucion(
             self.panel_bib.carpeta_actual))
         a.setShortcut("E")
-        a = m.addAction("Soltar herramienta / cerrar comparación", self._escape)
+        a = m.addAction(tr("Soltar herramienta / cerrar comparación"), self._escape)
         a.setShortcut(Qt.Key_Escape)
-        a = m.addAction("Borrar la medición elegida", self.borrar_medicion)
+        a = m.addAction(tr("Borrar la medición elegida"), self.borrar_medicion)
         a.setShortcut(QKeySequence.Delete)
         m.addSeparator()
-        sub = m.addMenu("Tema")
+        sub_idioma = m.addMenu(tr("Idioma"))
+        grupo_idioma = QActionGroup(self)
+        for codigo, nombre in i18n.IDIOMAS.items():
+            a = sub_idioma.addAction(nombre)
+            a.setCheckable(True)
+            a.setChecked(i18n.idioma() == codigo)
+            a.triggered.connect(lambda _=False, c=codigo: self.set_idioma(c))
+            grupo_idioma.addAction(a)
+        sub = m.addMenu(tr("Tema"))
         grupo = QActionGroup(self)
-        for nombre, texto in ((theme.OSCURO, "Oscuro"), (theme.CLARO, "Claro")):
+        for nombre, texto in ((theme.OSCURO, tr("Oscuro")), (theme.CLARO, tr("Claro"))):
             a = sub.addAction(texto)
             a.setCheckable(True)
             a.setChecked(theme.gestor.nombre == nombre)
@@ -488,10 +498,10 @@ class MainWindow(QMainWindow):
             grupo.addAction(a)
         self._acciones_tema = {a.text(): a for a in grupo.actions()}
 
-        m = mb.addMenu("Ay&uda")
-        m.addAction("Guía rápida", lambda: ayuda.mostrar_guia(self)).setShortcut(
+        m = mb.addMenu(tr("Ay&uda"))
+        m.addAction(tr("Guía rápida"), lambda: ayuda.mostrar_guia(self)).setShortcut(
             QKeySequence.HelpContents)
-        m.addAction("Acerca de Thermal Studio", lambda: ayuda.mostrar_acerca_de(self))
+        m.addAction(tr("Acerca de Thermal Studio"), lambda: ayuda.mostrar_acerca_de(self))
 
     def _suavizado_cambiado(self, activo):
         self.settings.setValue("suavizar", activo)
@@ -500,7 +510,7 @@ class MainWindow(QMainWindow):
 
     def ver_visible(self):
         if self.panel.foto_visible is None:
-            self.statusBar().showMessage("Esta foto no tiene imagen visible.", 5000)
+            self.statusBar().showMessage(tr("Esta foto no tiene imagen visible."), 5000)
             return
         if self._ventana_visible is None:
             self._ventana_visible = VentanaVisible(self)
@@ -516,11 +526,25 @@ class MainWindow(QMainWindow):
         else:
             v.mostrar(self.panel.foto_visible, self.img.path.name if self.img.path else "")
 
+    def set_idioma(self, codigo):
+        """Se guarda y se aplica al volver a abrir: muchos textos se arman al
+        crear la ventana."""
+        if self.settings.value("idioma") == codigo or (
+                not self.settings.value("idioma") and i18n.idioma() == codigo):
+            return
+        self.settings.setValue("idioma", codigo)
+        # El aviso va en el idioma nuevo, que es el que el usuario eligio entender
+        anterior = i18n.idioma()
+        i18n.set_idioma(codigo)
+        texto = tr("El idioma cambia la próxima vez que abras el programa.")
+        i18n.set_idioma(anterior)
+        QMessageBox.information(self, APP_NOMBRE, texto)
+
     def set_tema(self, nombre):
         theme.aplicar(QApplication.instance(), nombre)
         self.settings.setValue("tema", nombre)
         for a in self._acciones_tema.values():
-            a.setChecked(a.text() == ("Oscuro" if nombre == theme.OSCURO else "Claro"))
+            a.setChecked(a.text() == (tr("Oscuro") if nombre == theme.OSCURO else tr("Claro")))
 
     def conexion_camara(self):
         s = self.settings
@@ -543,9 +567,9 @@ class MainWindow(QMainWindow):
 
     def cambiar_biblioteca(self):
         if self.panel_bib.importando():
-            QMessageBox.information(self, APP_NOMBRE, "Esperá a que termine la importación.")
+            QMessageBox.information(self, APP_NOMBRE, tr("Esperá a que termine la importación."))
             return
-        d = QFileDialog.getExistingDirectory(self, "Carpeta de la biblioteca",
+        d = QFileDialog.getExistingDirectory(self, tr("Carpeta de la biblioteca"),
                                              str(self.biblioteca.raiz))
         if d:
             self.biblioteca = Library(d)
@@ -554,8 +578,8 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, ev):
         if self.panel_bib.importando():
-            r = QMessageBox.question(self, APP_NOMBRE, "Hay una importación en curso. "
-                                     "¿Cancelarla y salir? Las fotos ya descargadas se conservan.")
+            r = QMessageBox.question(self, APP_NOMBRE, tr("Hay una importación en curso. "
+                                     "¿Cancelarla y salir? Las fotos ya descargadas se conservan."))
             if r != QMessageBox.Yes:
                 ev.ignore()
                 return
@@ -581,22 +605,22 @@ class MainWindow(QMainWindow):
         for a in (self.act_ant, self.act_sig):
             a.setShortcutContext(Qt.WidgetWithChildrenShortcut)
             self.viewer.addAction(a)
-        self.btn_panel_bib = boton_icono("mdi6.dock-left", "Mostrar u ocultar la biblioteca (Ctrl+1)",
+        self.btn_panel_bib = boton_icono("mdi6.dock-left", tr("Mostrar u ocultar la biblioteca (Ctrl+1)"),
                                          checkable=True)
         h.addWidget(self.btn_panel_bib)
         h.addWidget(separador())
-        self.btn_ant = boton_icono("mdi6.chevron-left", "Foto anterior (←)")
-        self.btn_sig = boton_icono("mdi6.chevron-right", "Foto siguiente (→)")
+        self.btn_ant = boton_icono("mdi6.chevron-left", tr("Foto anterior (←)"))
+        self.btn_sig = boton_icono("mdi6.chevron-right", tr("Foto siguiente (→)"))
         self.btn_ant.clicked.connect(lambda: self._navegar(-1))
         self.btn_sig.clicked.connect(lambda: self._navegar(1))
         h.addWidget(self.btn_ant)
         h.addWidget(self.btn_sig)
-        self.btn_comparar = boton("Comparar", "mdi6.compare",
-                                  tooltip="Comparar la foto abierta con otra del mismo lugar (C)")
+        self.btn_comparar = boton(tr("Comparar"), "mdi6.compare",
+                                  tooltip=tr("Comparar la foto abierta con otra del mismo lugar (C)"))
         self.btn_comparar.clicked.connect(self.comparar_con_otra)
         h.addWidget(self.btn_comparar)
-        btn_informe = boton("Informe", "mdi6.file-document-outline",
-                            tooltip="Crear un informe PDF con las fotos, mediciones y notas (Ctrl+P)")
+        btn_informe = boton(tr("Informe"), "mdi6.file-document-outline",
+                            tooltip=tr("Crear un informe PDF con las fotos, mediciones y notas (Ctrl+P)"))
         btn_informe.clicked.connect(self.crear_informe)
         h.addWidget(btn_informe)
         h.addWidget(separador())
@@ -605,14 +629,14 @@ class MainWindow(QMainWindow):
         self.combo_paleta = QComboBox()
         self.combo_paleta.setIconSize(QSize(56, 14))
         self.combo_paleta.setMinimumWidth(150)
-        self.combo_paleta.setToolTip("Paleta de colores")
+        self.combo_paleta.setToolTip(tr("Paleta de colores"))
         for pid in palettes.disponibles():
             self.combo_paleta.addItem(swatch_paleta(pid), palettes.NOMBRES[pid], pid)
         guardada = self.settings.value("paleta", palettes.POR_DEFECTO)
         self.combo_paleta.setCurrentIndex(max(self.combo_paleta.findData(guardada), 0))
         self.combo_paleta.currentIndexChanged.connect(self._paleta_cambiada)
         h.addWidget(self.combo_paleta)
-        self.btn_invertir = boton_icono("mdi6.swap-horizontal", "Invertir la paleta",
+        self.btn_invertir = boton_icono("mdi6.swap-horizontal", tr("Invertir la paleta"),
                                         checkable=True)
         self.btn_invertir.toggled.connect(self._paleta_cambiada)
         h.addWidget(self.btn_invertir)
@@ -620,13 +644,13 @@ class MainWindow(QMainWindow):
 
         # Contraste
         self.combo_contraste = QComboBox()
-        self.combo_contraste.addItem("Como la cámara", CONTRASTE_CAMARA)
-        self.combo_contraste.addItem("Lineal", CONTRASTE_LINEAL)
+        self.combo_contraste.addItem(tr("Como la cámara"), CONTRASTE_CAMARA)
+        self.combo_contraste.addItem(tr("Lineal"), CONTRASTE_LINEAL)
         self.combo_contraste.setToolTip(
-            "Contraste.\n\nComo la cámara: reparte los colores según cuánto ocupa cada temperatura en la "
+            tr("Contraste.\n\nComo la cámara: reparte los colores según cuánto ocupa cada temperatura en la "
             "imagen, para ver detalles aunque haya cielo u objetos muy fríos o calientes.\n"
             "Lineal: escala pareja entre mínima y máxima, para comparar fotos entre sí.\n"
-            "Las temperaturas medidas son las mismas en los dos modos.")
+            "Las temperaturas medidas son las mismas en los dos modos."))
         guardado = self.settings.value("contraste", CONTRASTE_CAMARA)
         self.combo_contraste.setCurrentIndex(max(self.combo_contraste.findData(guardado), 0))
         self.combo_contraste.currentIndexChanged.connect(self._contraste_cambiado)
@@ -636,25 +660,25 @@ class MainWindow(QMainWindow):
         # Rango
         self.spin_lo = self._spin()
         self.spin_hi = self._spin()
-        self.spin_lo.setToolTip("Rango de la escala de colores: mínima")
-        self.spin_hi.setToolTip("Rango de la escala de colores: máxima")
+        self.spin_lo.setToolTip(tr("Rango de la escala de colores: mínima"))
+        self.spin_hi.setToolTip(tr("Rango de la escala de colores: máxima"))
         h.addWidget(self.spin_lo)
         h.addWidget(etiqueta("–", "suave"))
         h.addWidget(self.spin_hi)
-        btn_auto = boton("Auto", "mdi6.arrow-expand-vertical",
-                         tooltip="Ajustar el rango a la imagen: hasta la máxima, sin el cielo ni el "
-                         "5 % más frío (A)")
+        btn_auto = boton(tr("Auto"), "mdi6.arrow-expand-vertical",
+                         tooltip=tr("Ajustar el rango a la imagen: hasta la máxima, sin el cielo ni el "
+                         "5 % más frío (A)"))
         btn_auto.setShortcut("A")
         btn_auto.clicked.connect(self.rango_auto)
         h.addWidget(btn_auto)
         self.btn_fijar = boton_icono(
-            "mdi6.lock-outline", "Mantener el rango al cambiar de foto, para compararlas "
-            "con la misma escala de colores", checkable=True)
+            "mdi6.lock-outline", tr("Mantener el rango al cambiar de foto, para compararlas "
+            "con la misma escala de colores"), checkable=True)
         h.addWidget(self.btn_fijar)
         h.addWidget(separador())
 
         self.btn_marcas = boton_icono("mdi6.crosshairs-gps",
-                                      "Mostrar máxima, mínima y centro sobre la imagen",
+                                      tr("Mostrar máxima, mínima y centro sobre la imagen"),
                                       checkable=True)
         self.btn_marcas.setChecked(True)
         self.btn_marcas.toggled.connect(
@@ -667,10 +691,10 @@ class MainWindow(QMainWindow):
         self.grupo_herr.setExclusive(True)
         self.botones_herr = {}
         for herr, icono, texto, atajo in (
-                (None, "mdi6.cursor-default-outline", "Mover y elegir (Esc)", "Esc"),
-                (PUNTO, "mdi6.crosshairs", "Punto: clic en la imagen (P)", "P"),
-                (LINEA, "mdi6.vector-line", "Línea con perfil: arrastrá en la imagen (L)", "L"),
-                (AREA, "mdi6.vector-square", "Área: arrastrá en la imagen (R)", "R")):
+                (None, "mdi6.cursor-default-outline", tr("Mover y elegir (Esc)"), "Esc"),
+                (PUNTO, "mdi6.crosshairs", tr("Punto: clic en la imagen (P)"), "P"),
+                (LINEA, "mdi6.vector-line", tr("Línea con perfil: arrastrá en la imagen (L)"), "L"),
+                (AREA, "mdi6.vector-square", tr("Área: arrastrá en la imagen (R)"), "R")):
             b = boton_icono(icono, texto, checkable=True)
             if atajo != "Esc":
                 b.setShortcut(atajo)
@@ -682,7 +706,7 @@ class MainWindow(QMainWindow):
         h.addStretch(1)
 
         # Muestra el tema al que se pasa: sol en oscuro, luna en claro
-        self.btn_tema = boton_icono("mdi6.white-balance-sunny", "Cambiar entre tema oscuro y claro")
+        self.btn_tema = boton_icono("mdi6.white-balance-sunny", tr("Cambiar entre tema oscuro y claro"))
         theme.al_cambiar(lambda: self.btn_tema.setIcon(theme.icono(
             "mdi6.white-balance-sunny" if theme.gestor.nombre == theme.OSCURO
             else "mdi6.weather-night")))
@@ -690,7 +714,7 @@ class MainWindow(QMainWindow):
             theme.CLARO if theme.gestor.nombre == theme.OSCURO else theme.OSCURO))
         h.addWidget(self.btn_tema)
         h.addWidget(separador())
-        self.btn_panel_datos = boton_icono("mdi6.dock-right", "Mostrar u ocultar los datos (Ctrl+2)",
+        self.btn_panel_datos = boton_icono("mdi6.dock-right", tr("Mostrar u ocultar los datos (Ctrl+2)"),
                                            checkable=True)
         h.addWidget(self.btn_panel_datos)
 
@@ -717,7 +741,7 @@ class MainWindow(QMainWindow):
     def dialogo_abrir(self):
         carpeta = self.settings.value("ultima_carpeta", str(Path.home()))
         path, _ = QFileDialog.getOpenFileName(
-            self, "Abrir imagen térmica", carpeta, "Imágenes de la cámara (*.jpg *.jpeg *.JPG)")
+            self, tr("Abrir imagen térmica"), carpeta, tr("Imágenes de la cámara (*.jpg *.jpeg *.JPG)"))
         if path:
             self.abrir(path)
 
@@ -727,7 +751,7 @@ class MainWindow(QMainWindow):
             img = ThermalImage.abrir(path)
         except (FormatoInvalido, OSError) as e:
             QMessageBox.warning(self, APP_NOMBRE,
-                                "No se pudo abrir %s:\n\n%s" % (path.name, e))
+                                tr("No se pudo abrir %s:\n\n%s") % (path.name, e))
             return False
 
         rango = self.viewer.rango() if (self.btn_fijar.isChecked() and self.img) else None
@@ -794,10 +818,10 @@ class MainWindow(QMainWindow):
 
     def set_herramienta(self, herramienta):
         if self.area_visor.comparando() and herramienta is not None:
-            self.statusBar().showMessage("Para medir, cerrá la comparación (Esc).", 5000)
+            self.statusBar().showMessage(tr("Para medir, cerrá la comparación (Esc)."), 5000)
             herramienta = None
         elif self.img is None and herramienta is not None:
-            self.statusBar().showMessage("Abrí una foto para medir sobre ella.", 5000)
+            self.statusBar().showMessage(tr("Abrí una foto para medir sobre ella."), 5000)
             herramienta = None
         self.capa.set_herramienta(herramienta)
         self.botones_herr[herramienta].setChecked(True)
@@ -822,7 +846,7 @@ class MainWindow(QMainWindow):
             self._guardar_mediciones()
         else:
             self.statusBar().showMessage(
-                "No se puede usar ese nombre: está vacío o ya lo tiene otra medición.", 6000)
+                tr("No se puede usar ese nombre: está vacío o ya lo tiene otra medición."), 6000)
         self.panel.mediciones.refrescar()
 
     def _referencia_cambiada(self):
@@ -835,7 +859,7 @@ class MainWindow(QMainWindow):
         try:
             self.biblioteca.guardar_mediciones(self.img.path.name, self.capa.mediciones)
         except OSError as e:
-            self.statusBar().showMessage("No se pudieron guardar las mediciones: %s" % e, 10000)
+            self.statusBar().showMessage(tr("No se pudieron guardar las mediciones: %s") % e, 10000)
 
     # -- informe y exportacion ---------------------------------------------
     def _ajustes_imagen(self):
@@ -860,7 +884,7 @@ class MainWindow(QMainWindow):
 
     def _requiere_foto(self):
         if self.img is None or self.area_visor.comparando():
-            QMessageBox.information(self, APP_NOMBRE, "Abrí una foto primero.")
+            QMessageBox.information(self, APP_NOMBRE, tr("Abrí una foto primero."))
             return False
         return True
 
@@ -872,10 +896,10 @@ class MainWindow(QMainWindow):
         except OSError:
             en_carpeta = []
         opciones = [
-            (ELEGIDAS, "Las fotos elegidas en la galería", len(elegidas) if len(elegidas) > 1 else 0),
-            (ABIERTA, "Solo la foto abierta", 1 if self.img and self.img.path else 0),
-            (CARPETA, "Toda la carpeta «%s»" % self.panel_bib.nombre_visible(carpeta_rel)
-             if carpeta_rel else "Toda la carpeta", len(en_carpeta)),
+            (ELEGIDAS, tr("Las fotos elegidas en la galería"), len(elegidas) if len(elegidas) > 1 else 0),
+            (ABIERTA, tr("Solo la foto abierta"), 1 if self.img and self.img.path else 0),
+            (CARPETA, tr("Toda la carpeta «%s»") % self.panel_bib.nombre_visible(carpeta_rel)
+             if carpeta_rel else tr("Toda la carpeta"), len(en_carpeta)),
         ]
         sugerida = Path(carpeta_rel).name if carpeta_rel and not carpeta_rel.startswith(
             "Importadas") else ""
@@ -886,14 +910,14 @@ class MainWindow(QMainWindow):
         rutas = {ELEGIDAS: elegidas, ABIERTA: [self.img.path] if self.img else [],
                  CARPETA: en_carpeta}[fuente]
         datos = d.datos()
-        nombre = "Informe %s %s.pdf" % (datos.instalacion or datos.titulo,
-                                        datos.fecha.strftime("%d-%m-%Y"))
-        destino = self._pedir_destino("Guardar informe", nombre.replace("/", "-"), "PDF (*.pdf)")
+        nombre = tr("Informe %s %s.pdf") % (datos.instalacion or datos.titulo,
+                                        datos.fecha.strftime(formato_fecha().replace("/", "-")))
+        destino = self._pedir_destino(tr("Guardar informe"), nombre.replace("/", "-"), tr("PDF (*.pdf)"))
         if destino is None:
             return
         self._guardar_mediciones()  # que entren las notas recien escritas
 
-        progreso = QProgressDialog("Preparando el informe…", "Cancelar", 0, len(rutas) + 1, self)
+        progreso = QProgressDialog(tr("Preparando el informe…"), tr("Cancelar"), 0, len(rutas) + 1, self)
         progreso.setWindowTitle(APP_NOMBRE)
         progreso.setMinimumDuration(300)
         fotos = []
@@ -904,52 +928,52 @@ class MainWindow(QMainWindow):
             try:
                 fotos.append((ThermalImage.abrir(ruta), self.biblioteca.leer_mediciones(Path(ruta).name)))
             except (FormatoInvalido, OSError) as e:
-                self.statusBar().showMessage("Se salteó %s: %s" % (Path(ruta).name, e), 8000)
-        progreso.setLabelText("Escribiendo el PDF…")
+                self.statusBar().showMessage(tr("Se salteó %s: %s") % (Path(ruta).name, e), 8000)
+        progreso.setLabelText(tr("Escribiendo el PDF…"))
         progreso.setValue(len(rutas))
         try:
             generar_pdf(destino, fotos, datos, self._ajustes_imagen(), self._nombre_lugar)
         except OSError as e:
             progreso.close()
-            QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar el informe:\n\n%s" % e)
+            QMessageBox.warning(self, APP_NOMBRE, tr("No se pudo guardar el informe:\n\n%s") % e)
             return
         progreso.setValue(len(rutas) + 1)
         self.settings.remove(CLAVE_BORRADOR)
-        self.statusBar().showMessage("Informe guardado en %s" % destino, 10000)
+        self.statusBar().showMessage(tr("Informe guardado en %s") % destino, 10000)
         sistema.abrir_archivo(destino)
 
     def exportar_png(self):
         if not self._requiere_foto():
             return
-        destino = self._pedir_destino("Exportar imagen", self.img.path.stem + ".png", "PNG (*.png)")
+        destino = self._pedir_destino(tr("Exportar imagen"), self.img.path.stem + ".png", tr("PNG (*.png)"))
         if destino and not imagen_anotada(self.img, self.capa.mediciones,
                                           self._ajustes_imagen()).save(str(destino)):
-            QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar la imagen.")
+            QMessageBox.warning(self, APP_NOMBRE, tr("No se pudo guardar la imagen."))
 
     def exportar_csv_mediciones(self):
         if not self._requiere_foto():
             return
         if not self.capa.mediciones.lista:
-            QMessageBox.information(self, APP_NOMBRE, "Esta foto no tiene mediciones todavía.")
+            QMessageBox.information(self, APP_NOMBRE, tr("Esta foto no tiene mediciones todavía."))
             return
-        destino = self._pedir_destino("Exportar mediciones", self.img.path.stem + " mediciones.csv",
-                                      "CSV (*.csv)")
+        destino = self._pedir_destino(tr("Exportar mediciones"), self.img.path.stem + tr(" mediciones.csv"),
+                                      tr("CSV (*.csv)"))
         if destino:
             try:
                 exportar.csv_mediciones(destino, self.img, self.capa.mediciones)
             except OSError as e:
-                QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar:\n\n%s" % e)
+                QMessageBox.warning(self, APP_NOMBRE, tr("No se pudo guardar:\n\n%s") % e)
 
     def exportar_csv_temperaturas(self):
         if not self._requiere_foto():
             return
-        destino = self._pedir_destino("Exportar temperaturas",
-                                      self.img.path.stem + " temperaturas.csv", "CSV (*.csv)")
+        destino = self._pedir_destino(tr("Exportar temperaturas"),
+                                      self.img.path.stem + tr(" temperaturas.csv"), tr("CSV (*.csv)"))
         if destino:
             try:
                 exportar.csv_temperaturas(destino, self.img.temps)
             except OSError as e:
-                QMessageBox.warning(self, APP_NOMBRE, "No se pudo guardar:\n\n%s" % e)
+                QMessageBox.warning(self, APP_NOMBRE, tr("No se pudo guardar:\n\n%s") % e)
 
     # -- comparacion -------------------------------------------------------
     def comparar_seleccionadas(self):
@@ -964,7 +988,7 @@ class MainWindow(QMainWindow):
     def comparar_con_otra(self):
         if self.img is None or self.img.path is None:
             QMessageBox.information(self, APP_NOMBRE,
-                                    "Abrí primero una de las fotos que querés comparar.")
+                                    tr("Abrí primero una de las fotos que querés comparar."))
             return
         d = DialogoElegirSegunda(self.biblioteca, self.img.path, self.panel_bib.nombre_visible,
                                  self)
@@ -975,7 +999,7 @@ class MainWindow(QMainWindow):
         try:
             a, b = (ThermalImage.abrir(r) for r in rutas)
         except (FormatoInvalido, OSError) as e:
-            QMessageBox.warning(self, APP_NOMBRE, "No se pudo abrir una de las fotos:\n\n%s" % e)
+            QMessageBox.warning(self, APP_NOMBRE, tr("No se pudo abrir una de las fotos:\n\n%s") % e)
             return
         fijo = self.btn_fijar.isChecked() and (self.img or self.area_visor.comparando())
         self.comparacion.mostrar(a, b, self._vista_activa().rango() if fijo else None,
@@ -987,7 +1011,7 @@ class MainWindow(QMainWindow):
         for s in (self.spin_lo, self.spin_hi):
             s.setEnabled(True)
         self._actualizar_navegacion()
-        self.setWindowTitle("Comparación — %s" % APP_NOMBRE)
+        self.setWindowTitle(tr("Comparación — %s") % APP_NOMBRE)
 
     def ver_evolucion(self, carpeta_rel):
         try:
@@ -995,15 +1019,15 @@ class MainWindow(QMainWindow):
         except OSError:
             rutas = []
         if not rutas:
-            QMessageBox.information(self, APP_NOMBRE, "Elegí en la biblioteca la carpeta del "
-                                    "lugar (la que tiene sus fotos de distintas fechas).")
+            QMessageBox.information(self, APP_NOMBRE, tr("Elegí en la biblioteca la carpeta del "
+                                    "lugar (la que tiene sus fotos de distintas fechas)."))
             return
         self.set_herramienta(None)
         self.evolucion.mostrar(rutas, self.biblioteca, self.panel_bib.nombre_visible(carpeta_rel))
         self.area_visor.mostrar_evolucion()
         self.evolucion.setFocus()
         self._actualizar_navegacion()
-        self.setWindowTitle("Evolución — %s" % APP_NOMBRE)
+        self.setWindowTitle(tr("Evolución — %s") % APP_NOMBRE)
 
     def cerrar_comparacion(self):
         """Vuelve a la foto desde la comparacion o la evolucion."""

@@ -8,21 +8,22 @@ pantalla de la camara.
 import json
 from functools import lru_cache
 from pathlib import Path
+from ..i18n import tr
 
 import numpy as np
 
 # id interno -> nombre para mostrar, en el orden de los menus
 NOMBRES = {
-    "iron": "Hierro",
-    "rainbow": "Arcoíris",
-    "rainbow_hc": "Arcoíris alto contraste",
-    "lava": "Lava",
-    "white_hot": "Blanco caliente",
-    "black_hot": "Negro caliente",
-    "highlight": "Grises con alerta roja",
-    "red": "Rojo",
-    "green": "Verde",
-    "blue": "Azul",
+    "iron": tr("Hierro"),
+    "rainbow": tr("Arcoíris"),
+    "rainbow_hc": tr("Arcoíris alto contraste"),
+    "lava": tr("Lava"),
+    "white_hot": tr("Blanco caliente"),
+    "black_hot": tr("Negro caliente"),
+    "highlight": tr("Grises con alerta roja"),
+    "red": tr("Rojo"),
+    "green": tr("Verde"),
+    "blue": tr("Azul"),
 }
 
 POR_DEFECTO = "iron"

@@ -11,6 +11,7 @@ S), y esa diferencia cambia mucho menos entre verano e invierno que la
 temperatura absoluta.
 """
 from dataclasses import dataclass, field
+from ..i18n import tr
 
 import numpy as np
 
@@ -201,7 +202,7 @@ class Resultado:
     es_referencia: bool
 
 
-NOMBRES_TIPO = {PUNTO: "Punto", LINEA: "Línea", AREA: "Área"}
+NOMBRES_TIPO = {PUNTO: tr("Punto"), LINEA: tr("Línea"), AREA: tr("Área")}
 
 
 def resultados(mediciones, temps):

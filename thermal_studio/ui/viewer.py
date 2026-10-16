@@ -5,6 +5,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPainter
 
 from ..core import palettes
+from ..i18n import temp
 from ..core.thermal_image import posiciones_ecualizadas
 from . import theme
 
@@ -59,7 +60,7 @@ class VistaImagen(pg.ViewBox):
 
 
 def fmt_temp(t):
-    return "—" if t is None else "%.1f °C" % t
+    return temp(t)
 
 
 class ThermalViewer(pg.GraphicsLayoutWidget):

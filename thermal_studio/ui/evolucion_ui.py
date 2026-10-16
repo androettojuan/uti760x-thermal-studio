@@ -19,6 +19,7 @@ from ..core.thermal_image import ThermalImage
 from ..core.uti760x import FormatoInvalido
 from . import theme
 from .widgets import boton, etiqueta, marco
+from ..i18n import fecha, fecha_hora, formato_fecha, plural, temp, tr
 
 # Colores de las series de mediciones (la maxima de la foto va en gris)
 COLORES = ["#ff7a1a", "#3d9bff", "#34c759", "#c86bfa", "#ffb020", "#ff5b4f", "#2ec4b6",
@@ -30,7 +31,7 @@ class _EjeFechas(pg.DateAxisItem):
     """Fechas como dd/mm/aaaa (o dd/mm hh:mm si las marcas estan a menos de un dia)."""
 
     def tickStrings(self, values, scale, spacing):
-        formato = "%d/%m %H:%M" if spacing < 86400 else "%d/%m/%Y"
+        formato = "%H:%M" if spacing < 86400 else formato_fecha()
         out = []
         for v in values:
             try:
@@ -89,7 +90,7 @@ class VistaEvolucion(QWidget):
 
     abrirFoto = Signal(Path)
     cerrar = Signal()
-    COLUMNAS = ("Fecha", "Máxima", "Mayor ΔT", "Mediciones", "Notas")
+    COLUMNAS = (tr("Fecha"), tr("Máxima"), tr("Mayor ΔT"), tr("Mediciones"), tr("Notas"))
 
     def __init__(self):
         super().__init__()
@@ -107,7 +108,7 @@ class VistaEvolucion(QWidget):
         v.setSpacing(10)
 
         barra = QHBoxLayout()
-        self.titulo = etiqueta("Evolución", "titulo")
+        self.titulo = etiqueta(tr("Evolución"), "titulo")
         self.subtitulo = etiqueta("", "suave")
         barra.addWidget(self.titulo)
         barra.addSpacing(12)
@@ -115,8 +116,8 @@ class VistaEvolucion(QWidget):
         barra.addStretch(1)
         self.grupo = QButtonGroup(self)
         for clave, texto, ayuda in (
-                (VER_MAXIMAS, "Máximas", "Máxima de cada foto y de cada medición"),
-                (VER_DELTAS, "ΔT", "ΔT de cada medición contra la referencia de su foto")):
+                (VER_MAXIMAS, tr("Máximas"), tr("Máxima de cada foto y de cada medición")),
+                (VER_DELTAS, tr("ΔT"), tr("ΔT de cada medición contra la referencia de su foto"))):
             b = boton(texto, tooltip=ayuda)
             b.setCheckable(True)
             b.setChecked(clave == self.modo)
@@ -124,7 +125,7 @@ class VistaEvolucion(QWidget):
             self.grupo.addButton(b)
             barra.addWidget(b)
         barra.addSpacing(8)
-        b = boton("Cerrar", "mdi6.close", tooltip="Volver a ver una sola foto (Esc)")
+        b = boton(tr("Cerrar"), "mdi6.close", tooltip=tr("Volver a ver una sola foto (Esc)"))
         b.clicked.connect(self.cerrar)
         barra.addWidget(b)
         v.addLayout(barra)
@@ -150,7 +151,7 @@ class VistaEvolucion(QWidget):
         self.tabla.verticalHeader().hide()
         self.tabla.setSelectionBehavior(QAbstractItemView.SelectRows)
         self.tabla.setEditTriggers(QAbstractItemView.NoEditTriggers)
-        self.tabla.setToolTip("Doble clic para abrir la foto")
+        self.tabla.setToolTip(tr("Doble clic para abrir la foto"))
         enc = self.tabla.horizontalHeader()
         for i in range(4):
             enc.setSectionResizeMode(i, QHeaderView.ResizeToContents)
@@ -163,8 +164,9 @@ class VistaEvolucion(QWidget):
     def mostrar(self, rutas, biblioteca, nombre_lugar):
         """Empieza a leer las fotos; el grafico aparece cuando terminan."""
         self.detener()
-        self.titulo.setText("Evolución — %s" % nombre_lugar)
-        self.subtitulo.setText("Leyendo %d foto%s…" % (len(rutas), "" if len(rutas) == 1 else "s"))
+        self.titulo.setText(tr("Evolución — %s") % nombre_lugar)
+        self.subtitulo.setText(plural(len(rutas), "Leyendo %d foto…", "Leyendo %d fotos…")
+                               % len(rutas))
         self.filas = []
         self._dibujar()
         self.progreso.setRange(0, max(len(rutas), 1))
@@ -188,11 +190,11 @@ class VistaEvolucion(QWidget):
         self.filas = filas
         con_fecha = [f.fecha for f in filas if f.fecha]
         if con_fecha:
-            self.subtitulo.setText("%d foto%s · del %s al %s" % (
-                len(filas), "" if len(filas) == 1 else "s",
-                min(con_fecha).strftime("%d/%m/%Y"), max(con_fecha).strftime("%d/%m/%Y")))
+            self.subtitulo.setText(tr("%s · del %s al %s") % (
+                plural(len(filas), "%d foto", "%d fotos") % len(filas),
+                fecha(min(con_fecha)), fecha(max(con_fecha))))
         else:
-            self.subtitulo.setText("%d foto%s" % (len(filas), "" if len(filas) == 1 else "s"))
+            self.subtitulo.setText(plural(len(filas), "%d foto", "%d fotos") % len(filas))
         self._llenar_tabla()
         self._dibujar()
 
@@ -211,11 +213,11 @@ class VistaEvolucion(QWidget):
         if not self.filas:
             mensaje = ""
         elif len(con_fecha) < 2:
-            mensaje = "Hace falta al menos dos fotos con fecha en esta carpeta para ver la evolución."
+            mensaje = tr("Hace falta al menos dos fotos con fecha en esta carpeta para ver la evolución.")
         elif self.modo == VER_DELTAS and not hay_deltas:
-            mensaje = ("Todavía no hay ΔT: en las fotos, marcá una medición como referencia (★) "
+            mensaje = (tr("Todavía no hay ΔT: en las fotos, marcá una medición como referencia (★) "
                        "y poné a las mediciones del mismo equipo el mismo nombre en cada ronda "
-                       "(por ejemplo «Fase R»).")
+                       "(por ejemplo «Fase R»)."))
         self.vacio.setText(mensaje)
         self.vacio.setVisible(bool(mensaje))
 
@@ -223,14 +225,14 @@ class VistaEvolucion(QWidget):
             return fecha.timestamp()
 
         if self.modo == VER_MAXIMAS and con_fecha:
-            g.setLabel("left", "Máxima", units="°C")
+            g.setLabel("left", tr("Máxima"), units="°C")
             pen = pg.mkPen(theme.color("texto_suave"), width=1.5, style=Qt.DashLine)
             curva = g.plot([ts(f.fecha) for f in con_fecha], [f.maxima for f in con_fecha],
                            pen=pen, symbol="o", symbolSize=7,
-                           symbolBrush=theme.color("texto_suave"), name="Máxima de la foto")
+                           symbolBrush=theme.color("texto_suave"), name=tr("Máxima de la foto"))
             self._clic_en_puntos(curva, con_fecha)
         elif self.modo == VER_DELTAS:
-            g.setLabel("left", "ΔT contra la referencia", units="°C")
+            g.setLabel("left", tr("ΔT contra la referencia"), units="°C")
             g.addLine(y=0, pen=pg.mkPen(theme.color("borde"), width=1))
 
         for i, (nombre, puntos) in enumerate(sorted(series.items())):
@@ -256,8 +258,8 @@ class VistaEvolucion(QWidget):
         self.tabla.setRowCount(len(self.filas))
         for r, f in enumerate(self.filas):
             d = f.mayor_delta
-            valores = (f.fecha.strftime("%d/%m/%Y %H:%M") if f.fecha else "Sin fecha",
-                       "%.1f °C" % f.maxima, "—" if d is None else "%+.1f °C" % d,
+            valores = (fecha_hora(f.fecha) if f.fecha else tr("Sin fecha"),
+                       temp(f.maxima), temp(d, signo=True),
                        str(len(f.mediciones)) if f.mediciones else "—",
                        f.notas.replace("\n", " "))
             for c, texto in enumerate(valores):

@@ -18,6 +18,7 @@ from datetime import datetime
 from pathlib import Path
 
 from .mediciones import Mediciones
+from ..i18n import formato_fecha, plural, tr
 
 CARPETA_INTERNA = ".thermal_studio"
 CARPETA_IMPORTADAS = "Importadas"
@@ -37,13 +38,13 @@ class ErrorBiblioteca(Exception):
 def validar_nombre(nombre):
     nombre = nombre.strip()
     if not nombre:
-        raise ErrorBiblioteca("El nombre no puede estar vacío.")
+        raise ErrorBiblioteca(tr("El nombre no puede estar vacío."))
     if _PROHIBIDOS.search(nombre):
-        raise ErrorBiblioteca('El nombre no puede contener < > : " / \\ | ? *')
+        raise ErrorBiblioteca(tr('El nombre no puede contener < > : " / \\ | ? *'))
     if nombre.startswith(".") or nombre.endswith("."):
-        raise ErrorBiblioteca("El nombre no puede empezar ni terminar con un punto.")
+        raise ErrorBiblioteca(tr("El nombre no puede empezar ni terminar con un punto."))
     if nombre.split(".")[0].upper() in _RESERVADOS:
-        raise ErrorBiblioteca("«%s» es un nombre reservado de Windows." % nombre)
+        raise ErrorBiblioteca(tr("«%s» es un nombre reservado de Windows.") % nombre)
     return nombre
 
 
@@ -55,13 +56,19 @@ _RE_CARPETA_FECHA = re.compile(r"^(\d{4})-(\d{2})-(\d{2})$")
 
 
 def fecha_visible(nombre_carpeta):
-    """'2026-08-28' -> '28/08/2026'; cualquier otro nombre queda igual.
+    """'2026-08-28' -> '28/08/2026' (o como se escriban las fechas en el idioma
+    elegido); cualquier otro nombre queda igual.
 
     En disco las carpetas de fecha van como AAAA-MM-DD (Windows no acepta "/"
-    y asi se ordenan solas); en pantalla se muestran dd/mm/aaaa.
+    y asi se ordenan solas); en pantalla, con el formato del idioma.
     """
     m = _RE_CARPETA_FECHA.match(nombre_carpeta)
-    return "%s/%s/%s" % (m.group(3), m.group(2), m.group(1)) if m else nombre_carpeta
+    if not m:
+        return nombre_carpeta
+    try:
+        return datetime.strptime(nombre_carpeta, "%Y-%m-%d").strftime(formato_fecha())
+    except ValueError:
+        return nombre_carpeta
 
 
 def fecha_de_nombre(nombre):
@@ -91,7 +98,7 @@ class Library:
         p = (self.raiz / rel).resolve() if rel else self.raiz.resolve()
         raiz = self.raiz.resolve()
         if p != raiz and raiz not in p.parents:
-            raise ErrorBiblioteca("Ruta fuera de la biblioteca: %s" % rel)
+            raise ErrorBiblioteca(tr("Ruta fuera de la biblioteca: %s") % rel)
         return p
 
     def rel(self, path):
@@ -122,7 +129,7 @@ class Library:
         nombre = validar_nombre(nombre)
         p = self.abs(padre_rel) / nombre
         if p.exists():
-            raise ErrorBiblioteca("Ya existe una carpeta «%s» ahí." % nombre)
+            raise ErrorBiblioteca(tr("Ya existe una carpeta «%s» ahí.") % nombre)
         p.mkdir(parents=True)
         return self.rel(p)
 
@@ -132,35 +139,36 @@ class Library:
 
     def renombrar_carpeta(self, rel, nombre):
         if self.es_protegida(rel):
-            raise ErrorBiblioteca("Esta carpeta no se puede renombrar.")
+            raise ErrorBiblioteca(tr("Esta carpeta no se puede renombrar."))
         nombre = validar_nombre(nombre)
         p = self.abs(rel)
         nuevo = p.with_name(nombre)
         if nuevo.exists() and nuevo != p:
-            raise ErrorBiblioteca("Ya existe una carpeta «%s» ahí." % nombre)
+            raise ErrorBiblioteca(tr("Ya existe una carpeta «%s» ahí.") % nombre)
         p.rename(nuevo)
         return self.rel(nuevo)
 
     def eliminar_carpeta(self, rel):
         """Solo borra carpetas sin fotos (puede tener subcarpetas vacias)."""
         if self.es_protegida(rel):
-            raise ErrorBiblioteca("Esta carpeta no se puede eliminar.")
+            raise ErrorBiblioteca(tr("Esta carpeta no se puede eliminar."))
         p = self.abs(rel)
         n = sum(1 for f in p.rglob("*") if es_foto(f))
         if n:
-            raise ErrorBiblioteca("La carpeta tiene %d foto%s. Movelas a otra carpeta antes "
-                                  "de eliminarla." % (n, "" if n == 1 else "s"))
+            raise ErrorBiblioteca(plural(
+                n, "La carpeta tiene %d foto. Movela a otra carpeta antes de eliminarla.",
+                "La carpeta tiene %d fotos. Movelas a otra carpeta antes de eliminarla.") % n)
         shutil.rmtree(p)
 
     def mover_carpeta(self, rel, destino_rel):
         if self.es_protegida(rel):
-            raise ErrorBiblioteca("Esta carpeta no se puede mover.")
+            raise ErrorBiblioteca(tr("Esta carpeta no se puede mover."))
         p, dest = self.abs(rel), self.abs(destino_rel)
         if dest == p or p in dest.parents:
-            raise ErrorBiblioteca("No se puede mover una carpeta dentro de sí misma.")
+            raise ErrorBiblioteca(tr("No se puede mover una carpeta dentro de sí misma."))
         nuevo = dest / p.name
         if nuevo.exists():
-            raise ErrorBiblioteca("Ya existe una carpeta «%s» en el destino." % p.name)
+            raise ErrorBiblioteca(tr("Ya existe una carpeta «%s» en el destino.") % p.name)
         shutil.move(str(p), str(nuevo))
         return self.rel(nuevo)
 
@@ -251,7 +259,7 @@ class Library:
 
     def carpeta_importacion(self, nombre_foto):
         """Carpeta relativa donde cae una foto importada: Importadas/AAAA-MM-DD."""
-        fecha = fecha_de_nombre(nombre_foto) or "sin fecha"
+        fecha = fecha_de_nombre(nombre_foto) or tr("sin fecha")
         return "%s/%s" % (CARPETA_IMPORTADAS, fecha)
 
     # -- mediciones --------------------------------------------------------
