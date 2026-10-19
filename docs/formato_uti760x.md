@@ -188,3 +188,17 @@ tramos de 16 a 39 C) y las 12 lecturas nuevas son de una sola sesion de 20 s:
 es la variacion entre sesiones ya conocida (hasta ~1 C), probablemente la
 autocalibracion del obturador. Para separarla de un efecto real de FPA hacen
 falta mas sesiones con el sensor entre 29 y 36 C.
+
+### 19/10/2026: 100-123 C y otra sesion de freezer
+
+Dos fotos de 100 y 123 C en rango normal (raw hasta 11716): el modelo daba
+~1 C de mas arriba de 90 C. Reajustado: arriba de 50 C rms 0,62 -> 0,37 C,
+maximo 1,10 -> 0,70 C. Rango validado ahora -19 a 123 C.
+
+Cinco fotos de freezer con el sensor a 22 C: el modelo da +0,6 a +1,2 C sobre
+la pantalla, parejo. Sesiones viejas con el sensor a 18-21 C daban -1,5 C en
+el mismo rango, y entre los metadatos de las sesiones no cambia nada salvo
+realFPA, IDs y fecha. Reajustar con estas lecturas no mejora nada (rms 0,49
+igual), asi que se dejaron los coeficientes: es la variacion de la camara
+entre sesiones, no un error del modelo, y no se puede corregir desde el
+archivo. Queda dentro de la exactitud que declara la camara (+-2 C).

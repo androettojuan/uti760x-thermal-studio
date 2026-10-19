@@ -36,17 +36,19 @@ class TempConverter:
         f = (fpa - 25) / 10
         raw = R (1 + g1 f + g2 f^2) / (exp(B / T_K) - F) + O0 + O1 f + O2 f^2
 
-    Ajustado (herramientas/calibracion/calibrar.py) sobre 254 lecturas de la
-    pantalla de la camara (172 fotos del 11/06/2026 al 19/10/2026, de -19 a
+    Ajustado (herramientas/calibracion/calibrar.py) sobre 263 lecturas de la
+    pantalla de la camara (177 fotos del 11/06/2026 al 19/10/2026, de -19 a
     123 C), las LUT exactas de tres export CSV del software de UNI-T y la tabla
     de calibracion de fabrica que trae cada foto (-10 a 120 C).
 
         rango cubierto : raw 2444..11716 (-19 a 123 C), FPA 16..40.3 C
-        rms            : 0.47 C (0.37 C arriba de 50 C)
+        rms            : 0.49 C (0.37 C arriba de 50 C)
         error maximo   : 1.31 C
 
-    Queda una variacion de una sesion a otra (hasta ~1 C) que nada en el
-    archivo explica; ver docs/formato_uti760x.md. Solo vale para el rango
+    Queda una variacion de una sesion a otra (hasta ~1 C bajo cero) que nada
+    en el archivo explica: el freezer del 19/10 da +1 C y sesiones viejas con
+    el sensor a la misma temperatura, -1.5 C. Reajustar no la achica (es de la
+    camara, no del modelo); ver docs/formato_uti760x.md. Solo vale para el rango
     normal (tempMode 0); el rango alto (tempMode 1) no esta calibrado.
     """
 
@@ -61,7 +63,7 @@ class TempConverter:
     RANGO_CAMARA_NORMAL = (-20.0, 125.0)
     FPA_VALIDADO = (16.0, 40.3)
     FPA_POR_DEFECTO = 25.0
-    ERROR_TIPICO_C = 0.47
+    ERROR_TIPICO_C = 0.49
     ERROR_MAX_C = 1.31
 
     @classmethod
