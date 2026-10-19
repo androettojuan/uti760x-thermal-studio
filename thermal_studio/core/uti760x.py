@@ -36,13 +36,13 @@ class TempConverter:
         f = (fpa - 25) / 10
         raw = R (1 + g1 f + g2 f^2) / (exp(B / T_K) - F) + O0 + O1 f + O2 f^2
 
-    Ajustado (herramientas/calibracion/calibrar.py) sobre 243 lecturas de la
-    pantalla de la camara (168 fotos del 11/06/2026 al 16/10/2026, de -19 a
-    96 C), las LUT exactas de tres export CSV del software de UNI-T y la tabla
+    Ajustado (herramientas/calibracion/calibrar.py) sobre 254 lecturas de la
+    pantalla de la camara (172 fotos del 11/06/2026 al 19/10/2026, de -19 a
+    123 C), las LUT exactas de tres export CSV del software de UNI-T y la tabla
     de calibracion de fabrica que trae cada foto (-10 a 120 C).
 
-        rango cubierto : raw 2444..9519 (-19 a 120 C), FPA 16..40.3 C
-        rms            : 0.47 C
+        rango cubierto : raw 2444..11716 (-19 a 123 C), FPA 16..40.3 C
+        rms            : 0.47 C (0.37 C arriba de 50 C)
         error maximo   : 1.31 C
 
     Queda una variacion de una sesion a otra (hasta ~1 C) que nada en el
@@ -51,11 +51,11 @@ class TempConverter:
     """
 
     # B, ln R, F, O0, O1, g1, O2, g2
-    COEF = (1411.8818236439847, 12.788060064195722, 1.4584608654654863,
-            1103.9706359000722, 22.646081658280018, -0.18316988778525192,
-            -81.81853020377739, 0.049336755508830724)
-    RANGO_VALIDADO = (2444, 9519)
-    RANGO_VALIDADO_C = (-19, 120)
+    COEF = (1407.020788258235, 12.768300523189232, 1.977214086226883,
+            1100.90917928844, 17.158951064916952, -0.18030314438020362,
+            -70.4895628754927, 0.04447311383680948)
+    RANGO_VALIDADO = (2444, 11716)
+    RANGO_VALIDADO_C = (-19, 123)
     # Lo que mide la camara en el rango normal: fuera de esto la pantalla
     # muestra "<-20,0" o ">125,0"
     RANGO_CAMARA_NORMAL = (-20.0, 125.0)
