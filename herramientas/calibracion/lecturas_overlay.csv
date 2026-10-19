@@ -1,5 +1,7 @@
 # Lecturas del overlay de la camara (pantalla), transcriptas a ojo del render JPEG.
 # foto;que;grados_c  (que = max | min | centro)
+# Solo fotos con emisividad 0.95 y reflejada 25 C: es lo que ajusta el modelo
+# (otra emisividad se corrige aparte, TempConverter.corregir_emisividad).
 IMG20260611212732HD.jpg;max;10.5
 IMG20260611212820HD.jpg;max;11.0
 IMG20260611212954HD.jpg;max;7.1
@@ -243,3 +245,8 @@ IMG20261016105036HD.jpg;min;2.3
 IMG20261016105042HD.jpg;centro;3.3
 IMG20261016105042HD.jpg;max;10.1
 IMG20261016105042HD.jpg;min;2.8
+IMG20261016233807HD.jpg;centro;81.3
+IMG20261016233807HD.jpg;min;30.9
+IMG20261019191426HD.jpg;centro;21.1
+IMG20261019191426HD.jpg;max;29.7
+IMG20261019191426HD.jpg;min;12.4

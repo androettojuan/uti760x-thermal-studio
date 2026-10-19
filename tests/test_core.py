@@ -137,3 +137,15 @@ def test_rango_auto_conjunto_abarca_las_dos_fotos():
     lo, hi = rango_auto_conjunto([fria, caliente])
     assert hi == 60.0
     assert lo == pytest.approx(fria.rango_auto()[0])
+
+
+def test_correccion_por_emisividad():
+    t = np.array([0.0, 20.0, 25.0, 40.0, 100.0])
+    assert TempConverter.corregir_emisividad(t, 0.95, 25) is t   # la de calibracion
+    t80 = TempConverter.corregir_emisividad(t, 0.80, 25)
+    # Menos emisividad: lo mas caliente que la reflejada sube, lo mas frio baja
+    assert t80[0] < 0 and t80[1] < 20 and t80[3] > 40 and t80[4] > 100
+    assert t80[2] == pytest.approx(25.0)
+    # Un entorno mas caliente refleja mas: el objeto en si esta mas frio
+    assert TempConverter.corregir_emisividad(t, 0.95, 35)[3] < 40
+

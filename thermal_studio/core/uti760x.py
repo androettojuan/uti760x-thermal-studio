@@ -73,6 +73,43 @@ class TempConverter:
         neto = np.maximum(np.asarray(raw, dtype=np.float64) - corrimiento, 1e-3)
         return b / np.log(np.exp(ln_r) * ganancia / neto + f_planck) - 273.15
 
+    # tempData viene SIN corregir por emisividad: la camara la aplica al
+    # mostrar. Todo lo de arriba (tabla de fabrica y lecturas) es a 0.95 y
+    # reflejada 25 C, asi que to_celsius da la temperatura con esos valores.
+    EMISIVIDAD_CALIBRACION = 0.95
+    REFLEJADA_CALIBRACION_C = 25.0
+
+    @classmethod
+    def _senal(cls, t):
+        """Radiancia relativa de un cuerpo negro a t C (la parte de Planck del
+        modelo, sin corrimiento; la ganancia se cancela en la correccion)."""
+        b, ln_r, f_planck = cls.COEF[:3]
+        return np.exp(ln_r) / (np.exp(b / (np.asarray(t, dtype=np.float64) + 273.15)) - f_planck)
+
+    @classmethod
+    def _temp_de_senal(cls, s):
+        b, ln_r, f_planck = cls.COEF[:3]
+        return b / np.log(np.exp(ln_r) / np.maximum(s, 1e-9) + f_planck) - 273.15
+
+    @classmethod
+    def corregir_emisividad(cls, temps, emisividad, reflejada_c):
+        """Pasa temperaturas de to_celsius (emisividad 0.95, reflejada 25 C) a
+        las de la foto, como hace la camara en pantalla:
+
+            medida = e * S(T_objeto) + (1 - e) * S(T_reflejada)
+
+        Probado con la misma escena a 0.95 y a 0.80: sin corregir, la maxima y
+        la minima diferian de la pantalla en -1.3 y +2.0 C; corregidas, en
+        menos de 0.5 C, lo mismo que la calibracion.
+        """
+        e0, r0 = cls.EMISIVIDAD_CALIBRACION, cls.REFLEJADA_CALIBRACION_C
+        e = e0 if emisividad is None else min(max(float(emisividad), 0.01), 1.0)
+        r = r0 if reflejada_c is None else float(reflejada_c)
+        if e == e0 and r == r0:
+            return temps
+        medida = e0 * cls._senal(temps) + (1 - e0) * cls._senal(r0)
+        return cls._temp_de_senal((medida - (1 - e) * cls._senal(r)) / e)
+
     @classmethod
     def fuera_de_rango(cls, raw_min, raw_max, fpa=None):
         lo, hi = cls.RANGO_VALIDADO

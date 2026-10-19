@@ -94,7 +94,7 @@ from thermal_studio.core.uti760x import TempConverter
 modelos = {
     "actual": (planck8, list(TempConverter.COEF)),   # sin reajustar: como esta hoy
     "planck7": (planck7, list(TempConverter.COEF)),
-    "planck8": (planck8, list(TempConverter.COEF) + [0.0]),
+    "planck8": (planck8, list(TempConverter.COEF)),
 }
 mejor = {}
 for nombre, (fun, p0) in modelos.items():

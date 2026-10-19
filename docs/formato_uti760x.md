@@ -106,9 +106,22 @@ fotos dan max/min/centro dentro de +-0.9 C de lo que muestra la camara.
 ### Para mejorarlo
 
 Hacen falta CSVs de escenas **calientes** (50-150 C). Arriba de 25 C hay tres
-anclas leidas a ojo de un overlay y nada mas. Tambien sigue sin saberse si la
-correccion por emisividad viene aplicada dentro de `tempData`, lo que decide si
-la app puede recalcular por emisividad en post.
+anclas leidas a ojo de un overlay y nada mas.
+
+### Emisividad
+
+`tempData` viene **sin** corregir por emisividad: la camara la aplica al
+mostrar. Con la misma escena a 0.95 y a 0.80 (`IMG20261019191426HD.jpg` y
+`IMG20261019191449HD.jpg`), los crudos casi no cambian y la pantalla si (max
+29.7 -> 34.6, min 12.4 -> 10.2). La tabla de fabrica dice `calemis` 0.95 y
+`calReftemper` 25, igual que todas las lecturas de la calibracion, asi que el
+modelo da la temperatura a 0.95 / 25 C y la app la lleva a la de la foto con
+
+    medida = e * S(T_objeto) + (1 - e) * S(T_reflejada)
+
+usando la parte de Planck del modelo como S. Contra la pantalla a 0.80: max
++0.2, min -0.7, centro -0.4 C (sin corregir: -1.3, +2.0, +0.1). Esto deja
+recalcular con otra emisividad despues de sacar la foto.
 
 ## Cosas verificadas contra la pantalla de la camara
 

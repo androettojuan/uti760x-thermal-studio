@@ -86,8 +86,10 @@ class ThermalImage:
             temp_sensor=p.get("realFPA"),
         )
         fpa = p.get("realFPA")
+        temps = TempConverter.corregir_emisividad(
+            TempConverter.to_celsius(raw, fpa), meta.emisividad, meta.temp_reflejada)
         return cls(
-            TempConverter.to_celsius(raw, fpa), meta, path=path,
+            temps, meta, path=path,
             fuera_de_rango=TempConverter.fuera_de_rango(int(raw.min()), int(raw.max()), fpa),
             visible_jpeg=f.visible_jpeg(),
             rango_alto=bool(p.get("tempMode")),
