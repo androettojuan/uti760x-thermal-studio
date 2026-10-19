@@ -62,6 +62,15 @@ def test_delta_t_contra_la_referencia(temps):
     assert ms.delta_t(normal, temps) is None        # la referencia contra si misma
 
 
+def test_delta_t_sin_valor_si_la_camara_no_mide(temps):
+    ms = Mediciones()
+    caliente = ms.agregar(PUNTO, [30.5, 10.5])     # 45
+    ms.referencia = ms.agregar(AREA, [49, 29, 61, 36]).nombre   # 35
+    assert ms.delta_t(caliente, temps, (-20.0, 125.0)) == pytest.approx(10.0)
+    assert ms.delta_t(caliente, temps, (-20.0, 40.0)) is None   # 45 es «>40»
+    assert ms.delta_t(caliente, temps, (36.0, 125.0)) is None   # la referencia es «<36»
+
+
 def test_nombres_automaticos_y_renombrar():
     ms = Mediciones()
     assert [ms.agregar(PUNTO, [0, 0]).nombre for _ in range(2)] == ["P1", "P2"]

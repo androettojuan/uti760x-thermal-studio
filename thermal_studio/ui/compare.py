@@ -3,6 +3,7 @@
 Las dos se ven con la misma paleta, el mismo rango y, en modo camara, el
 mismo reparto de colores: un color es la misma temperatura en las dos.
 """
+import html
 from pathlib import Path
 
 import numpy as np
@@ -22,7 +23,7 @@ from .mediciones_ui import CapaMediciones
 from .thumbnails import TAMANO, CargadorMiniaturas
 from .viewer import ThermalViewer, fmt_temp
 from .widgets import TarjetaDato, boton, etiqueta, marco
-from ..i18n import fecha, fecha_hora, num, plural, temp, tr
+from ..i18n import fecha, fecha_hora, fuera_de_limites, num, plural, temp, tr
 
 
 def _fecha(img):
@@ -93,15 +94,18 @@ class _Columna(QWidget):
             previos = {"max": referencia.maximo().temp, "media": referencia.media(),
                        "min": referencia.minimo().temp}
         for clave, tarjeta in (("max", self.tmax), ("media", self.tmedia), ("min", self.tmin)):
-            texto = fmt_temp(valores[clave], img.limites)
-            if previos is not None:
+            # Escapado: «<-20,0 °C» se tomaria como el comienzo de una etiqueta
+            texto = html.escape(fmt_temp(valores[clave], img.limites))
+            # Si alguna esta fuera de lo que mide la camara, no se sabe cuanto cambio
+            if previos is not None and not (fuera_de_limites(valores[clave], img.limites) or
+                                            fuera_de_limites(previos[clave], referencia.limites)):
                 d = valores[clave] - previos[clave]
                 # Que la maxima suba es lo que puede indicar un problema
                 color = theme.color("aviso") if (clave == "max" and d >= 1.0) else \
                     theme.color("texto_suave")
                 texto += ("&nbsp;<span style='font-size:13px; color:%s'>%s</span>"
                           % (color, temp(d, signo=True)))
-            tarjeta.set(texto)
+            tarjeta.set(texto, html=True)
 
 
 class VistaComparacion(QWidget):
@@ -184,8 +188,8 @@ class VistaComparacion(QWidget):
         self.lapso.setText(_tiempo_entre(a, b))
 
     def _llenar_tabla(self, a, ma, b, mb):
-        antes = {r.nombre: r for r in resultados(ma, a.temps)}
-        ahora = {r.nombre: r for r in resultados(mb, b.temps)}
+        antes = {r.nombre: r for r in resultados(ma, a.temps, a.limites)}
+        ahora = {r.nombre: r for r in resultados(mb, b.temps, b.limites)}
         # Primero las que estan en las dos (lo que de verdad se compara)
         nombres = [n for n in ahora if n in antes] + [n for n in ahora if n not in antes] + \
             [n for n in antes if n not in ahora]
@@ -193,6 +197,9 @@ class VistaComparacion(QWidget):
         for fila, n in enumerate(nombres):
             ra, rb = antes.get(n), ahora.get(n)
             cambio = rb.maxima - ra.maxima if ra and rb else None
+            if ra and rb and (fuera_de_limites(ra.maxima, a.limites) or
+                              fuera_de_limites(rb.maxima, b.limites)):
+                cambio = None
 
             def t(v, signo=False, lim=None):
                 if v is None:

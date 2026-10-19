@@ -371,7 +371,8 @@ class PanelMediciones(QWidget):
         self.tabla.setRowCount(len(self.mediciones.lista))
         for fila, m in enumerate(self.mediciones.lista):
             e = estadistica(m, self.temps) if self.temps is not None else None
-            d = self.mediciones.delta_t(m, self.temps) if self.temps is not None else None
+            d = (self.mediciones.delta_t(m, self.temps, self.limites)
+                 if self.temps is not None else None)
             es_ref = m.nombre == self.mediciones.referencia
             nombre = QTableWidgetItem(m.nombre)
             nombre.setData(Qt.UserRole, m.nombre)

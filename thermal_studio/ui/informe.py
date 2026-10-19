@@ -339,7 +339,7 @@ def _caratula(pg, fotos, datos, lugar):
         if not pg.cabe(y, 6):
             pg.nueva_pagina()
             y = encabezado(0, sigue=True)
-        filas = resultados(ms, img.temps)
+        filas = resultados(ms, img.temps, img.limites)
         deltas = [r.delta_t for r in filas if r.delta_t is not None]
         mayor = max(deltas, key=abs) if deltas else None
         f = img.meta.fecha
@@ -423,7 +423,7 @@ def _pagina_foto(pg, img, ms, datos, ajustes, lugar):
     y = y0 + 4 * 5.2 + 5
 
     # Mediciones
-    filas = resultados(ms, img.temps)
+    filas = resultados(ms, img.temps, img.limites)
     if filas:
         pg.fuente(9, True, ACENTO)
         pg.texto(0, y, 80, tr("MEDICIONES"))

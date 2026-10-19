@@ -107,6 +107,12 @@ def de_unidad(v, diferencia=False):
     return v / 1.8 if diferencia else (v - 32) / 1.8
 
 
+def fuera_de_limites(v, limites):
+    """True si la camara no mide `v` en el modo de la foto (ver `valor`).
+    Una diferencia con un valor asi no se puede saber."""
+    return v is not None and limites is not None and not limites[0] <= v <= limites[1]
+
+
 def valor(v, dec=1, signo=False, diferencia=None, limites=None):
     """Numero de una temperatura, sin la unidad: '31,5' (o '88,5' en °F).
 

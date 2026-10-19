@@ -17,7 +17,7 @@ def _num(v, decimales=1):
 
 
 def csv_mediciones(path, img, mediciones):
-    filas = resultados(mediciones, img.temps)
+    filas = resultados(mediciones, img.temps, img.limites)
     with open(path, "w", newline="", encoding="utf-8-sig") as f:
         w = csv.writer(f, delimiter=separador_csv())
         w.writerow([tr("Foto"), img.path.name if img.path else ""])

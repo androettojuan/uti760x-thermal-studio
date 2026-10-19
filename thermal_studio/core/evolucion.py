@@ -28,7 +28,7 @@ class FilaEvolucion:
 
 
 def fila(ruta, img, mediciones):
-    filas = resultados(mediciones, img.temps)
+    filas = resultados(mediciones, img.temps, img.limites)
     return FilaEvolucion(
         ruta=ruta, fecha=img.meta.fecha, maxima=img.maximo().temp,
         mediciones={r.nombre: (r.maxima, r.delta_t) for r in filas},

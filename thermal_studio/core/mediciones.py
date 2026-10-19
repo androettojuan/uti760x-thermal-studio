@@ -11,7 +11,7 @@ S), y esa diferencia cambia mucho menos entre verano e invierno que la
 temperatura absoluta.
 """
 from dataclasses import dataclass, field
-from ..i18n import tr
+from ..i18n import fuera_de_limites, tr
 
 import numpy as np
 
@@ -156,13 +156,17 @@ class Mediciones:
             self.referencia = nuevo
         return True
 
-    def delta_t(self, med, temps):
+    def delta_t(self, med, temps, limites=None):
         """Maxima de `med` menos la maxima de la referencia, o None si no hay
-        referencia o `med` es la referencia."""
+        referencia, si `med` es la referencia o si alguna de las dos esta
+        fuera de lo que mide la camara (`limites`): ahi no se sabe."""
         ref = self.buscar(self.referencia) if self.referencia else None
         if ref is None or ref is med:
             return None
-        return estadistica(med, temps).maxima - estadistica(ref, temps).maxima
+        a, b = estadistica(med, temps).maxima, estadistica(ref, temps).maxima
+        if fuera_de_limites(a, limites) or fuera_de_limites(b, limites):
+            return None
+        return a - b
 
     # -- guardado ----------------------------------------------------------
     def a_dict(self):
@@ -205,12 +209,12 @@ class Resultado:
 NOMBRES_TIPO = {PUNTO: tr("Punto"), LINEA: tr("Línea"), AREA: tr("Área")}
 
 
-def resultados(mediciones, temps):
+def resultados(mediciones, temps, limites=None):
     """Estadistica y Delta T de cada medicion, en el orden de la lista."""
     out = []
     for m in mediciones.lista:
         e = estadistica(m, temps)
         out.append(Resultado(m.nombre, m.tipo, e.maxima, e.minima, e.media,
-                             mediciones.delta_t(m, temps),
+                             mediciones.delta_t(m, temps, limites),
                              m.nombre == mediciones.referencia))
     return out

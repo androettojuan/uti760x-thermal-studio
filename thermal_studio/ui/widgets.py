@@ -128,5 +128,7 @@ class TarjetaDato(QWidget):
                 self.titulo.setText("<span style='color:%s'>●</span>&nbsp; %s" % (c, titulo))
             theme.al_cambiar(pintar)
 
-    def set(self, texto):
+    def set(self, texto, html=False):
+        # Formato explicito: Qt adivina si es HTML y con «<-20,0 °C» se equivoca
+        self.valor.setTextFormat(Qt.RichText if html else Qt.PlainText)
         self.valor.setText(texto)
