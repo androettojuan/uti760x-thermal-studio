@@ -134,3 +134,5 @@ python -m venv .venv
 ## Licencia
 
 MIT © 2026 Juan Manuel Androetto. Ver [LICENSE](LICENSE).
+
+¿Te sirve Thermal Studio? [Invitame un cafecito ☕](https://cafecito.app/voltacore)
